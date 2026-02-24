@@ -1,0 +1,9 @@
+typer>=0.12
+sqlalchemy>=2.0
+pydantic>=2.7
+pydantic-settings>=2.2
+python-dotenv>=1.0
+dateparser>=1.2
+instructor>=1.6
+openai>=1.40
+pytest>=8.0

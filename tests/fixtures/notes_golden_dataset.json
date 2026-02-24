@@ -1,0 +1,14 @@
+[
+  {
+    "note": "Call Sarah about the Q3 budget next Monday",
+    "expected_card_type": "task",
+    "expected_keywords": ["q3", "budget"],
+    "expected_entities": ["Sarah"]
+  },
+  {
+    "note": "Idea: New logo should be blue and green",
+    "expected_card_type": "idea_note",
+    "expected_keywords": ["logo", "blue", "green"],
+    "expected_entities": []
+  }
+]
