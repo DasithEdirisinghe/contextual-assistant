@@ -5,10 +5,11 @@ import typer
 
 from assistant.config.logging import configure_logging
 from assistant.config.settings import get_settings
-from assistant.orchestration.ingestion_agent import IngestionAgent
-from assistant.persistence.db import SessionLocal, init_db
-from assistant.persistence.models import CardORM, EnvelopeORM, EntityORM
-from assistant.persistence.repositories.context_repo import ContextRepository
+from assistant.db.connection import SessionLocal, init_db
+from assistant.db.models import CardORM, EnvelopeORM, EntityORM
+from assistant.db.repo_context import ContextRepository
+from assistant.db.repo_suggestions import SuggestionsRepository
+from assistant.pipeline.orchestrator import AssistantOrchestrator
 
 app = typer.Typer(help="Contextual Personal Assistant CLI")
 
@@ -24,8 +25,8 @@ def ingest(note: str) -> None:
     """Ingest a raw note and generate structured card + envelope assignment."""
     settings = get_settings()
     with SessionLocal() as session:
-        agent = IngestionAgent(session, settings)
-        result = agent.ingest(note)
+        orchestrator = AssistantOrchestrator(session, settings)
+        result = orchestrator.ingest_note(note)
 
     typer.echo("Card Created")
     typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
@@ -80,7 +81,7 @@ def context_show(limit: int = 10) -> None:
 
 @app.command("thinking-sample")
 def thinking_sample() -> None:
-    """Show sample outputs from Thinking Agent design (non-implemented)."""
+    """Show sample outputs from Thinking Agent examples."""
     sample = [
         {
             "type": "next_step",
@@ -94,6 +95,29 @@ def thinking_sample() -> None:
         },
     ]
     typer.echo(json.dumps(sample, indent=2))
+
+
+@app.command("thinking-run")
+def thinking_run() -> None:
+    """Execute one full thinking cycle and persist suggestions."""
+    settings = get_settings()
+    with SessionLocal() as session:
+        orchestrator = AssistantOrchestrator(session, settings)
+        summary = orchestrator.run_thinking_cycle()
+    typer.echo(json.dumps(summary.model_dump(), indent=2))
+
+
+@app.command("thinking-list")
+def thinking_list(status: Optional[str] = None, limit: int = 50) -> None:
+    """List persisted thinking suggestions."""
+    with SessionLocal() as session:
+        repo = SuggestionsRepository(session)
+        rows = repo.list_suggestions(status=status, limit=limit)
+
+    for row in rows:
+        typer.echo(
+            f"[{row.id}] {row.suggestion_type} | priority={row.priority} | status={row.status} | {row.title}"
+        )
 
 
 if __name__ == "__main__":

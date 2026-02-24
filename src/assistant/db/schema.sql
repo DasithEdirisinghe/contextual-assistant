@@ -1,0 +1,2 @@
+-- SQLite schema is managed via SQLAlchemy ORM models.
+-- This file is intentionally lightweight to document ownership of DB layer.

@@ -1,17 +1,23 @@
 # System Architecture
 
 ## Components
-- CLI (`Typer`) for note ingestion and inspection.
-- Ingestion & Organization Agent for extraction, normalization, routing, persistence.
-- Context manager for dynamic user context updates.
-- SQLite persistence layer with 8-table schema.
-- Thinking Agent design contract for scheduled proactive suggestions.
+- CLI (`Typer`) for ingestion and inspection.
+- Pipeline orchestrator (`assistant.pipeline.orchestrator`) coordinates deterministic execution order.
+- Agent layer:
+  - `IngestionAgent`: extract structured card
+  - `OrganizationAgent`: route/create envelope
+  - `ContextAgent`: update context signals/entities
+  - `ThinkingAgent`: batch proactive suggestions
+- Prompt assets loaded from external templates in `assistant/prompts/*.jinja`.
+- Shared LLM runtime in `assistant.llm`.
+- Utility services in `assistant.services`.
+- DB access in `assistant.db` repositories over SQLAlchemy models.
 
 ## High-Level Data Flow
-1. User submits raw note in CLI.
-2. Extractor returns structured card fields under Pydantic schema.
-3. Date parser normalizes relative dates.
-4. Envelope matcher computes hybrid similarity and assigns/creates envelope.
-5. Card and linked entities are persisted.
-6. Context signals are updated with recency-aware strength.
-7. Ingestion telemetry event is written for observability.
+1. User submits a raw note via CLI.
+2. `IngestionAgent` returns structured extraction.
+3. `OrganizationAgent` scores and decides envelope assignment/creation.
+4. Card is persisted.
+5. `ContextAgent` updates entities and context signals.
+6. Ingestion event metadata is logged.
+7. `ThinkingAgent` can run scheduled cycles to persist proactive suggestions.

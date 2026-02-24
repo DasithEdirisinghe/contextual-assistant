@@ -1,4 +1,4 @@
-from assistant.ml.normalization.time_parser import parse_due_at
+from assistant.services.datetime import parse_due_at
 
 
 def test_parse_due_at_relative_date() -> None:

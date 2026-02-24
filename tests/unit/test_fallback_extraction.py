@@ -1,4 +1,4 @@
-from assistant.ml.extraction.fallback import FallbackExtractor
+from assistant.agents.ingestion.fallback import FallbackExtractor
 
 
 extractor = FallbackExtractor()

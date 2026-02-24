@@ -2,9 +2,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from assistant.config.settings import Settings
-from assistant.orchestration.ingestion_agent import IngestionAgent
-from assistant.persistence.db import Base
-from assistant.persistence.models import CardORM, EnvelopeORM
+from assistant.pipeline.orchestrator import AssistantOrchestrator
+from assistant.db.base import Base
+from assistant.db.models import CardORM, EnvelopeORM
 
 
 def test_ingestion_creates_card_and_envelope() -> None:
@@ -12,11 +12,11 @@ def test_ingestion_creates_card_and_envelope() -> None:
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
-    settings = Settings(openai_api_key=None, database_url="sqlite+pysqlite:///:memory:")
+    settings = Settings(llm_provider="ollama", llm_api_key=None, database_url="sqlite+pysqlite:///:memory:")
 
     with Session() as session:
-        agent = IngestionAgent(session, settings)
-        result = agent.ingest("Call Sarah about the Q3 budget next Monday")
+        orchestrator = AssistantOrchestrator(session, settings)
+        result = orchestrator.ingest_note("Call Sarah about the Q3 budget next Monday")
 
         cards = session.query(CardORM).all()
         envelopes = session.query(EnvelopeORM).all()
