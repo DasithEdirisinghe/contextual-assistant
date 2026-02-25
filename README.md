@@ -13,6 +13,7 @@ Python prototype that transforms unstructured notes into structured cards, route
 ## Project Structure
 - `src/assistant/schemas/*`: centralized Pydantic contracts
 - `src/assistant/prompts/*.jinja`: external prompt templates + loader
+- `src/assistant/prompts/registry.yaml`: prompt snapshot/version registry
 - `src/assistant/llm/client.py`: provider client factory
 - `src/assistant/llm/parsing.py`: structured parse helpers
 - `src/assistant/services/*`: datetime/keywords/embeddings/scoring utilities
@@ -62,6 +63,13 @@ LLM_MODEL=<model_name>
 LLM_BASE_URL=<https://your-endpoint/v1>
 ```
 
+### Prompt version selection (optional)
+```env
+# If unset, ingestion uses registry.yaml current_version.
+INGESTION_PROMPT_VERSION=ingestion.extract.v7
+```
+Invalid prompt versions fail fast at runtime.
+
 ## Run
 ### Initialize DB
 ```bash
@@ -95,3 +103,34 @@ scripts/demo_ingest.sh
 ```bash
 PYTHONPATH=src pytest -q
 ```
+
+## Prompt Snapshot Versioning
+- Active runtime alias: `src/assistant/prompts/ingestion.jinja`
+- Immutable snapshots: `ingestion.v1.jinja` ... latest `ingestion.vN.jinja`
+- Registry metadata: `src/assistant/prompts/registry.yaml`
+
+Automated release command (recommended):
+```bash
+PYTHONPATH=src python scripts/release_ingestion_prompt.py \
+  --changelog "Describe the prompt change"
+```
+
+Optional flags:
+```bash
+PYTHONPATH=src python scripts/release_ingestion_prompt.py \
+  --source-template ingestion.jinja \
+  --owner mle-team \
+  --schema-version ingestion.schema.v4 \
+  --changelog "Describe the prompt change" \
+  --dry-run
+```
+
+What the script updates:
+1. Creates new immutable snapshot `ingestion.v{N+1}.jinja`.
+2. Updates `ingestion.jinja` to match that snapshot exactly.
+3. Updates `registry.yaml` (`current_version`, `current_template`, `versions[]`, `sha256`).
+
+Runtime prompt selection:
+1. Set `INGESTION_PROMPT_VERSION` in `.env` to pin a specific snapshot.
+2. Leave it empty to use `registry.yaml` `current_version`.
+3. Unknown or missing versions fail fast with a clear error.

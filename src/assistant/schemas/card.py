@@ -19,20 +19,13 @@ class ResolvedDate(BaseModel):
     timezone: str = "UTC"
 
 
-class EntityMention(BaseModel):
-    entity_type: str
-    value: str
-    role: str = "mentioned"
-    confidence: float = 1.0
-
-
 class ExtractedCard(BaseModel):
     card_type: CardType
     description: str = Field(min_length=1)
     date_text: Optional[str] = None
     assignee: Optional[str] = None
     context_keywords: list[str] = Field(default_factory=list)
-    entities: list[EntityMention] = Field(default_factory=list)
+    reasoning_steps: list[str] = Field(default_factory=list)
     confidence: float = 0.0
 
 
@@ -43,6 +36,7 @@ class Card(BaseModel):
     due_at: Optional[datetime]
     assignee: Optional[str]
     keywords: list[str]
+    reasoning_steps: list[str] = Field(default_factory=list)
     envelope_id: Optional[int]
 
 

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = Field(default=None, alias="LLM_API_KEY")
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
     llm_base_url: Optional[str] = Field(default=None, alias="LLM_BASE_URL")
+    ingestion_prompt_version: Optional[str] = Field(default=None, alias="INGESTION_PROMPT_VERSION")
     database_url: str = Field(default="sqlite:///assistant.db", alias="DATABASE_URL")
     timezone: str = Field(default="UTC", alias="TIMEZONE")
     debug_mode: bool = Field(default=False, alias="DEBUG_MODE")

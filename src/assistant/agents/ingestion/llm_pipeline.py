@@ -13,15 +13,16 @@ from assistant.agents.ingestion.schemas import IngestionExtractedCardSchema
 from assistant.config.settings import Settings
 from assistant.llm.client import build_chat_model
 from assistant.llm.parsing import extract_json_block
-from assistant.prompts import load_prompt
-from assistant.schemas.card import EntityMention, ExtractedCard
+from assistant.prompts import load_prompt_versioned
+from assistant.schemas.card import ExtractedCard
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionLLMPipeline:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, prompt_version: str):
         self.settings = settings
+        self.prompt_version = prompt_version
         self.parser = PydanticOutputParser(pydantic_object=IngestionExtractedCardSchema)
         self.prompt = ChatPromptTemplate.from_messages(
             [
@@ -44,7 +45,7 @@ class IngestionLLMPipeline:
     def _build_prompt_inputs_node(self, payload: dict[str, str]) -> dict[str, str]:
         raw_text = payload["raw_text"]
         logger.debug("IngestionLLM node: build_prompt_inputs raw_text_len=%s", len(raw_text))
-        rendered = load_prompt("ingestion.jinja", raw_note=raw_text)
+        rendered = load_prompt_versioned("ingestion", version=self.prompt_version, raw_note=raw_text)
         return {
             "system_prompt": rendered,
             "format_instructions": self.parser.get_format_instructions(),
@@ -71,6 +72,7 @@ class IngestionLLMPipeline:
         try:
             parsed = self.parser.parse(content)
             logger.debug("IngestionLLM node: parse_response_success primary")
+            logger.debug("IngestionLLM node: parse_response_success primary parsed=%s", parsed)
             return parsed, latency_ms
         except Exception:
             logger.debug("IngestionLLM node: parse_response_primary_failed attempting_json_extract", exc_info=True)
@@ -90,23 +92,14 @@ class IngestionLLMPipeline:
             date_text=parsed.date_text,
             assignee=parsed.assignee,
             context_keywords=[k.strip().lower() for k in parsed.context_keywords if k.strip()],
-            entities=[
-                EntityMention(
-                    entity_type=e.entity_type,
-                    value=e.value.strip(),
-                    role=e.role,
-                    confidence=e.confidence,
-                )
-                for e in parsed.entities
-                if e.value.strip()
-            ],
+            reasoning_steps=[step.strip() for step in parsed.reasoning_steps if step and step.strip()],
             confidence=parsed.confidence,
         )
         logger.debug("IngestionLLM node: to_domain_model_done")
         return card, latency_ms
 
-    def extract(self, raw_text: str) -> tuple[ExtractedCard, int]:
+    def extract(self, raw_text: str) -> tuple[ExtractedCard, int, str]:
         logger.debug("IngestionLLM pipeline start")
-        result = self.chain.invoke({"raw_text": raw_text})
+        card, latency = self.chain.invoke({"raw_text": raw_text})
         logger.debug("IngestionLLM pipeline end")
-        return result
+        return card, latency, self.prompt_version

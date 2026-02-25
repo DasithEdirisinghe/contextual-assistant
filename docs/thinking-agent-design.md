@@ -6,7 +6,7 @@ Run every hour to analyze cards, envelopes, and context signals and generate pro
 ## Input Data
 - `cards`: status, due dates, assignee and envelope assignments
 - `envelopes`: project/topic groupings
-- `context_signals`: entity strength and recency
+- derived context from card fields (assignees, keywords, recency)
 
 ## Output Data
 - `thinking_runs`: execution/audit record for each schedule cycle
@@ -17,7 +17,7 @@ Run every hour to analyze cards, envelopes, and context signals and generate pro
 2. Collect active working set:
    - cards from recent window
    - envelopes with recent activity
-   - top context entities
+   - top derived assignees/themes from cards
 3. Apply suggestion rules:
    - Next Steps: envelope has pending items but no immediate next action
    - Recommendations: >=3 idea notes around same theme without focused envelope

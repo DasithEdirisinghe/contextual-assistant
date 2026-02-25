@@ -6,7 +6,7 @@
 - Agent layer:
   - `IngestionAgent`: extract structured card
   - `OrganizationAgent`: route/create envelope
-  - `ContextAgent`: update context signals/entities
+  - `ContextAgent`: derive context tags from card fields
   - `ThinkingAgent`: batch proactive suggestions
 - Prompt assets loaded from external templates in `assistant/prompts/*.jinja`.
 - Shared LLM runtime in `assistant.llm`.
@@ -18,6 +18,6 @@
 2. `IngestionAgent` returns structured extraction.
 3. `OrganizationAgent` scores and decides envelope assignment/creation.
 4. Card is persisted.
-5. `ContextAgent` updates entities and context signals.
+5. `ContextAgent` derives context tags from assignee and keywords.
 6. Ingestion event metadata is logged.
 7. `ThinkingAgent` can run scheduled cycles to persist proactive suggestions.

@@ -19,6 +19,7 @@ dependencies = [
   "langchain-core>=0.3",
   "langchain-openai>=0.2",
   "openai>=1.40",
+  "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

@@ -1,12 +1,15 @@
 import json
+from pathlib import Path
 from typing import Optional
 
 import typer
+from sqlalchemy import create_engine, text
 
 from assistant.config.logging import configure_logging
 from assistant.config.settings import get_settings
+from assistant.db.base import Base
 from assistant.db.connection import SessionLocal, init_db
-from assistant.db.models import CardORM, EnvelopeORM, EntityORM
+from assistant.db.models import CardORM, EnvelopeORM
 from assistant.db.repo_context import ContextRepository
 from assistant.db.repo_suggestions import SuggestionsRepository
 from assistant.pipeline.orchestrator import AssistantOrchestrator
@@ -38,7 +41,7 @@ def cards_list(limit: int = 20) -> None:
         rows = session.query(CardORM).order_by(CardORM.created_at.desc()).limit(limit).all()
     for row in rows:
         typer.echo(
-            f"[{row.id}] {row.card_type} | {row.description} | due={row.due_at} | envelope_id={row.envelope_id}"
+            f"[{row.id}] {row.card_type} | {row.description} | due={row.due_at} | envelope_id={row.envelope_id} | reasoning_steps={len(row.reasoning_steps_json or [])}"
         )
 
 
@@ -66,17 +69,9 @@ def envelope_show(envelope_id: int) -> None:
 def context_show(limit: int = 10) -> None:
     with SessionLocal() as session:
         repo = ContextRepository(session)
-        signals = repo.top_context_entities(limit=limit)
-        ids = [s.entity_id for s in signals]
-        entities = {e.id: e for e in session.query(EntityORM).filter(EntityORM.id.in_(ids)).all()} if ids else {}
-
-    for signal in signals:
-        entity = entities.get(signal.entity_id)
-        if not entity:
-            continue
-        typer.echo(
-            f"{entity.entity_type}:{entity.canonical_name} | strength={signal.strength:.2f} | mentions={signal.mention_count}"
-        )
+        rows = repo.top_context_entities(limit=limit)
+    for row in rows:
+        typer.echo(f"{row.label} | strength={row.strength:.2f} | mentions={row.mention_count}")
 
 
 @app.command("thinking-sample")
@@ -118,6 +113,81 @@ def thinking_list(status: Optional[str] = None, limit: int = 50) -> None:
         typer.echo(
             f"[{row.id}] {row.suggestion_type} | priority={row.priority} | status={row.status} | {row.title}"
         )
+
+
+@app.command("db-reset")
+def db_reset(
+    database_url: Optional[str] = typer.Option(
+        None,
+        "--database-url",
+        help="Target database URL. Defaults to DATABASE_URL from settings.",
+    ),
+    schema_mode: str = typer.Option(
+        "orm",
+        "--schema-mode",
+        help="Schema bootstrap mode: 'orm' (SQLAlchemy metadata) or 'sql' (apply SQL script).",
+    ),
+    schema_file: Optional[Path] = typer.Option(
+        None,
+        "--schema-file",
+        help="Path to SQL schema file when --schema-mode=sql.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip confirmation prompt.",
+    ),
+) -> None:
+    """Drop and recreate tables in the target database."""
+    settings = get_settings()
+    target_url = database_url or settings.database_url
+
+    if not yes:
+        confirmed = typer.confirm(f"This will erase all data in: {target_url}. Continue?")
+        if not confirmed:
+            typer.echo("Cancelled.")
+            raise typer.Exit(code=1)
+
+    engine = create_engine(target_url, future=True)
+    from assistant.db import models  # noqa: F401
+
+    mode = schema_mode.strip().lower()
+    if mode == "orm":
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        typer.echo(f"Database reset using ORM schema: {target_url}")
+        return
+
+    if mode == "sql":
+        if schema_file is None:
+            typer.echo("When --schema-mode=sql, --schema-file is required.")
+            raise typer.Exit(code=2)
+        if not schema_file.exists():
+            typer.echo(f"Schema file not found: {schema_file}")
+            raise typer.Exit(code=2)
+        if not target_url.startswith("sqlite"):
+            typer.echo("SQL schema mode currently supports only sqlite URLs.")
+            raise typer.Exit(code=2)
+
+        with engine.begin() as conn:
+            table_names = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            ).scalars().all()
+            for table_name in table_names:
+                conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
+
+        raw = engine.raw_connection()
+        try:
+            script = schema_file.read_text(encoding="utf-8")
+            raw.executescript(script)
+            raw.commit()
+        finally:
+            raw.close()
+        typer.echo(f"Database reset using SQL schema file: {schema_file}")
+        return
+
+    typer.echo("Invalid --schema-mode. Use 'orm' or 'sql'.")
+    raise typer.Exit(code=2)
 
 
 if __name__ == "__main__":

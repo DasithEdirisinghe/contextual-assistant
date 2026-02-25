@@ -1,61 +1,48 @@
 from __future__ import annotations
 
-from datetime import datetime
+from collections import Counter
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from assistant.db.models import CardEntityORM, ContextSignalORM, EntityORM
+from assistant.db.models import CardORM
+
+
+@dataclass
+class DerivedContextItem:
+    label: str
+    strength: float
+    mention_count: int
 
 
 class ContextRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def upsert_entity(self, entity_type: str, canonical_name: str, aliases: list[str] | None = None) -> EntityORM:
-        entity = (
-            self.session.query(EntityORM)
-            .filter(EntityORM.entity_type == entity_type, EntityORM.canonical_name == canonical_name)
-            .one_or_none()
-        )
-        if entity:
-            if aliases:
-                entity.aliases_json = sorted(set(entity.aliases_json + aliases))
-            return entity
+    def top_context_entities(self, limit: int = 10) -> list[DerivedContextItem]:
+        """Derive context from cards only (assignees + keywords), no entity tables."""
+        cards = self.session.query(CardORM).order_by(CardORM.created_at.desc()).limit(500).all()
 
-        entity = EntityORM(entity_type=entity_type, canonical_name=canonical_name, aliases_json=aliases or [])
-        self.session.add(entity)
-        self.session.flush()
-        return entity
+        weighted_counts: Counter[str] = Counter()
+        mentions: Counter[str] = Counter()
 
-    def link_card_entity(self, card_id: int, entity_id: int, role: str, confidence: float) -> None:
-        link = CardEntityORM(card_id=card_id, entity_id=entity_id, role=role, confidence=confidence)
-        self.session.merge(link)
+        # Recency-aware weighting: latest cards contribute higher signal.
+        total = len(cards)
+        for idx, card in enumerate(cards):
+            recency_weight = 1.0 - (idx / max(total, 1)) * 0.5
 
-    def update_signal(self, entity_id: int, increment: float, metadata: dict | None = None) -> ContextSignalORM:
-        signal = self.session.query(ContextSignalORM).filter(ContextSignalORM.entity_id == entity_id).one_or_none()
-        now = datetime.utcnow()
-        if not signal:
-            signal = ContextSignalORM(
-                entity_id=entity_id,
-                strength=increment,
-                mention_count=1,
-                last_seen_at=now,
-                metadata_json=metadata or {},
-            )
-            self.session.add(signal)
-            return signal
+            if card.assignee_text:
+                label = f"person:{card.assignee_text}"
+                weighted_counts[label] += 1.2 * recency_weight
+                mentions[label] += 1
 
-        signal.strength = max(0.0, signal.strength * 0.95 + increment)
-        signal.mention_count += 1
-        signal.last_seen_at = now
-        if metadata:
-            signal.metadata_json = {**signal.metadata_json, **metadata}
-        return signal
+            for keyword in (card.keywords_json or [])[:5]:
+                label = f"theme:{keyword}"
+                weighted_counts[label] += 0.8 * recency_weight
+                mentions[label] += 1
 
-    def top_context_entities(self, limit: int = 10) -> list[ContextSignalORM]:
-        return (
-            self.session.query(ContextSignalORM)
-            .order_by(ContextSignalORM.strength.desc(), ContextSignalORM.last_seen_at.desc())
-            .limit(limit)
-            .all()
-        )
+        top = weighted_counts.most_common(limit)
+        return [
+            DerivedContextItem(label=label, strength=float(strength), mention_count=int(mentions[label]))
+            for label, strength in top
+        ]

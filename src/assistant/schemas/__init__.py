@@ -1,4 +1,4 @@
-from assistant.schemas.card import Card, CardType, EntityMention, ExtractedCard, IngestResult, ResolvedDate
+from assistant.schemas.card import Card, CardType, ExtractedCard, IngestResult, ResolvedDate
 from assistant.schemas.context import ContextSignal, UserContext
 from assistant.schemas.envelope import Envelope, EnvelopeDecision
 from assistant.schemas.suggestion import Suggestion, SuggestionType, ThinkingRunSummary
@@ -6,7 +6,6 @@ from assistant.schemas.suggestion import Suggestion, SuggestionType, ThinkingRun
 __all__ = [
     "Card",
     "CardType",
-    "EntityMention",
     "ExtractedCard",
     "IngestResult",
     "ResolvedDate",

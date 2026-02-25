@@ -19,6 +19,7 @@ class CardsRepository:
         due_at: datetime | None,
         assignee_text: str | None,
         keywords: list[str],
+        reasoning_steps: list[str],
         envelope_id: int | None,
     ) -> CardORM:
         card = CardORM(
@@ -28,6 +29,7 @@ class CardsRepository:
             due_at=due_at,
             assignee_text=assignee_text,
             keywords_json=keywords,
+            reasoning_steps_json=reasoning_steps,
             envelope_id=envelope_id,
         )
         self.session.add(card)

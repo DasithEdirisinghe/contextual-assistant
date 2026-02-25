@@ -19,8 +19,7 @@ class OrganizationAgent:
 
     def route(self, extracted: ExtractedCard) -> tuple[EnvelopeDecision, int]:
         all_envelopes = self.envelopes.list_envelopes()
-        entity_values = [e.value.lower() for e in extracted.entities]
-        match = self.scorer.choose_best(extracted.description, extracted.context_keywords, entity_values, all_envelopes)
+        match = self.scorer.choose_best(extracted.description, extracted.context_keywords, all_envelopes)
 
         envelope = match.envelope
         if envelope is None or match.score < self.settings.envelope_assign_threshold:

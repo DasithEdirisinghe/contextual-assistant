@@ -11,8 +11,8 @@ def main() -> None:
 
     total = len(rows)
     correct_type = 0
-    entity_hits = 0
-    entity_total = 0
+    assignee_hits = 0
+    assignee_total = 0
 
     for row in rows:
         card = extractor.extract(row["note"])
@@ -20,17 +20,19 @@ def main() -> None:
             correct_type += 1
 
         expected_entities = {e.lower() for e in row.get("expected_entities", [])}
-        predicted_entities = {e.value.lower() for e in card.entities}
-        entity_hits += len(expected_entities.intersection(predicted_entities))
-        entity_total += len(expected_entities)
+        expected_assignee = next(iter(expected_entities), None)
+        if expected_assignee is not None:
+            assignee_total += 1
+            if (card.assignee or "").lower() == expected_assignee:
+                assignee_hits += 1
 
     card_type_acc = (correct_type / total) if total else 0.0
-    entity_recall = (entity_hits / entity_total) if entity_total else 1.0
+    assignee_recall = (assignee_hits / assignee_total) if assignee_total else 1.0
 
     summary = {
         "samples": total,
         "card_type_accuracy": round(card_type_acc, 4),
-        "entity_recall": round(entity_recall, 4),
+        "assignee_recall": round(assignee_recall, 4),
     }
     print(json.dumps(summary, indent=2))
 

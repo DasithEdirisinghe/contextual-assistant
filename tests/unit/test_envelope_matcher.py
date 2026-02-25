@@ -14,7 +14,6 @@ def test_envelope_match_prefers_related_name() -> None:
     result = matcher.choose_best(
         card_description="Call Sarah about quarterly budget",
         card_keywords=["budget", "q3", "sarah"],
-        card_entities=["sarah"],
         envelopes=[env1, env2],
     )
     assert result.envelope is not None

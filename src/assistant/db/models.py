@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from assistant.db.base import Base
@@ -30,51 +30,12 @@ class CardORM(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assignee_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
     keywords_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    reasoning_steps_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     envelope_id: Mapped[int | None] = mapped_column(ForeignKey("envelopes.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     envelope: Mapped[EnvelopeORM | None] = relationship(back_populates="cards")
-    entities: Mapped[list["CardEntityORM"]] = relationship(back_populates="card", cascade="all, delete-orphan")
-
-
-class EntityORM(Base):
-    __tablename__ = "entities"
-    __table_args__ = (UniqueConstraint("entity_type", "canonical_name", name="uq_entity_type_name"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    aliases_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-
-    card_links: Mapped[list["CardEntityORM"]] = relationship(back_populates="entity", cascade="all, delete-orphan")
-    signal: Mapped["ContextSignalORM"] = relationship(back_populates="entity", uselist=False, cascade="all, delete-orphan")
-
-
-class CardEntityORM(Base):
-    __tablename__ = "card_entities"
-
-    card_id: Mapped[int] = mapped_column(ForeignKey("cards.id"), primary_key=True)
-    entity_id: Mapped[int] = mapped_column(ForeignKey("entities.id"), primary_key=True)
-    role: Mapped[str] = mapped_column(String(50), primary_key=True)
-    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
-
-    card: Mapped[CardORM] = relationship(back_populates="entities")
-    entity: Mapped[EntityORM] = relationship(back_populates="card_links")
-
-
-class ContextSignalORM(Base):
-    __tablename__ = "context_signals"
-
-    entity_id: Mapped[int] = mapped_column(ForeignKey("entities.id"), primary_key=True)
-    strength: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    mention_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-
-    entity: Mapped[EntityORM] = relationship(back_populates="signal")
 
 
 class ThinkingRunORM(Base):
@@ -123,9 +84,6 @@ class IngestionEventORM(Base):
 __all__ = [
     "EnvelopeORM",
     "CardORM",
-    "EntityORM",
-    "CardEntityORM",
-    "ContextSignalORM",
     "ThinkingRunORM",
     "ThinkingSuggestionORM",
     "IngestionEventORM",

@@ -1,6 +1,6 @@
 import re
 
-from assistant.schemas.card import EntityMention, ExtractedCard
+from assistant.schemas.card import ExtractedCard
 from assistant.services.keywords import extract_keywords
 
 TASK_VERBS = {
@@ -37,14 +37,12 @@ class FallbackExtractor:
             card_type = "task"
 
         assignee = None
-        entities: list[EntityMention] = []
         name_match = re.search(
             r"\b(?:with|to)\s+([A-Z][a-z]+)\b|\b(?:[Cc]all|[Ee]mail|[Mm]essage|[Pp]ing|[Mm]eet)\s+([A-Z][a-z]+)\b",
             text,
         )
         if name_match:
             assignee = next(group for group in name_match.groups() if group)
-            entities.append(EntityMention(entity_type="person", value=assignee, role="assignee", confidence=0.6))
 
         return ExtractedCard(
             card_type=card_type,
@@ -52,6 +50,10 @@ class FallbackExtractor:
             date_text=date_text,
             assignee=assignee,
             context_keywords=sorted(set(keywords[:6])),
-            entities=entities,
+            reasoning_steps=[
+                f"classified as {card_type} using deterministic fallback rules",
+                f"date phrase detected: {date_text}" if date_text else "no explicit date phrase detected",
+                f"assignee inferred from pattern: {assignee}" if assignee else "no explicit assignee pattern matched",
+            ],
             confidence=0.55,
         )
