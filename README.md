@@ -56,6 +56,56 @@ Notes:
   - `KEYWORD_WEIGHT`
   - `ENTITY_WEIGHT`
 
+## Prompt Versioning (Per Agent)
+
+Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
+
+### 0. Update the active prompt template first
+Before releasing a new version, edit the active alias file for that agent:
+- `src/assistant/prompts/ingestion.jinja`
+- `src/assistant/prompts/envelope_refine.jinja`
+- `src/assistant/prompts/context_update.jinja`
+- `src/assistant/prompts/thinking.jinja`
+
+### 1. Create a new prompt version
+Use the generic release script:
+
+```bash
+python scripts/release_prompt.py \
+  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
+  --changelog "short change summary" \
+  --owner "<your_name_or_team>"
+```
+
+Examples:
+
+```bash
+python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
+```
+
+What this does:
+- creates immutable snapshot `<prompt_id>.vN.jinja`
+- updates active alias `<prompt_id>.jinja`
+- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
+
+### 2. Activate a prompt version via env
+Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
+
+```env
+INGESTION_PROMPT_VERSION=ingestion.extract.v10
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
+THINKING_PROMPT_VERSION=thinking.v1
+```
+
+Rules:
+- env override set -> that exact version is used
+- env override unset -> registry `current_version` is used
+- invalid version -> fail-fast error at runtime
+
 ## Run the App (Interactive)
 
 Start the interactive assistant:
@@ -75,6 +125,7 @@ What happens after launch:
 ## First-Run Usage
 
 Example commands inside interactive CLI:
+- `db-reset`: Clears and recreates the database schema (with confirmation prompt).
 - `ingest "Call Sarah about Q3 budget next Monday"`: Ingests a raw note and runs ingestion -> organization -> context update pipeline.
 - `cards`: Lists recent cards with type, due date, envelope link, keywords, and assignee.
 - `envelopes [cards_per_envelope]`: Lists envelopes and previews recent cards in each envelope (default 5).
@@ -88,7 +139,20 @@ Example commands inside interactive CLI:
 
 `exit` stops the CLI session and also stops the in-process thinking scheduler.
 
+### Interactive Demo Sequence
+After the interactive shell starts, you can run this sequence directly:
 
+```text
+ingest "Book a hotel for next week trip with Gibson"
+ingest "Do the Lit review of the TSRGS paper"
+ingest "Buy a birthday present to mike"
+ingest "Discuss the outcome of the TSRGS paper with Paul today"
+ingest "Bring 1 litre of milk when way to home"
+ingest "Ask Paul about his opinion on new research methodology of TSRGS paper"
+ingest "Buy coffee and sugar for home"
+cards
+envelopes
+```
 
 
 ## Architecture & Design

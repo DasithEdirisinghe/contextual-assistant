@@ -143,6 +143,63 @@ def _run_thinking_show(file: Path) -> None:
     typer.echo(json.dumps(payload, indent=2, default=str))
 
 
+def _run_db_reset(
+    *,
+    target_url: str,
+    schema_mode: str = "orm",
+    schema_file: Optional[Path] = None,
+    yes: bool = False,
+) -> None:
+    if not yes:
+        confirmed = typer.confirm(f"This will erase all data in: {target_url}. Continue?")
+        if not confirmed:
+            typer.echo("Cancelled.")
+            raise typer.Exit(code=1)
+
+    engine = create_engine(target_url, future=True)
+    from assistant.db import models  # noqa: F401
+
+    mode = schema_mode.strip().lower()
+    if mode == "orm":
+        reflected = MetaData()
+        reflected.reflect(bind=engine)
+        reflected.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        typer.echo(f"Database reset using ORM schema: {target_url}")
+        return
+
+    if mode == "sql":
+        if schema_file is None:
+            typer.echo("When --schema-mode=sql, --schema-file is required.")
+            raise typer.Exit(code=2)
+        if not schema_file.exists():
+            typer.echo(f"Schema file not found: {schema_file}")
+            raise typer.Exit(code=2)
+        if not target_url.startswith("sqlite"):
+            typer.echo("SQL schema mode currently supports only sqlite URLs.")
+            raise typer.Exit(code=2)
+
+        with engine.begin() as conn:
+            table_names = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            ).scalars().all()
+            for table_name in table_names:
+                conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
+
+        raw = engine.raw_connection()
+        try:
+            script = schema_file.read_text(encoding="utf-8")
+            raw.executescript(script)
+            raw.commit()
+        finally:
+            raw.close()
+        typer.echo(f"Database reset using SQL schema file: {schema_file}")
+        return
+
+    typer.echo("Invalid --schema-mode. Use 'orm' or 'sql'.")
+    raise typer.Exit(code=2)
+
+
 @app.command()
 def ingest(note: str) -> None:
     """Ingest a raw note and generate structured card + envelope assignment."""
@@ -218,6 +275,7 @@ def _interactive_help() -> None:
             [
                 "Interactive commands:",
                 "  help",
+                "  db-reset",
                 "  ingest <note>",
                 "  cards [limit]",
                 "  envelopes [cards_per_envelope]",
@@ -355,6 +413,11 @@ def interactive(
                 break
             if cmd == "help":
                 _interactive_help()
+            elif cmd == "db-reset":
+                if args:
+                    _warn("usage: db-reset")
+                    continue
+                _run_db_reset(target_url=settings.database_url, schema_mode="orm", yes=False)
             elif cmd == "ingest":
                 if not args:
                     _warn("usage: ingest <note>")
@@ -446,55 +509,7 @@ def db_reset(
     """Drop and recreate tables in the target database."""
     settings = get_settings()
     target_url = database_url or settings.database_url
-
-    if not yes:
-        confirmed = typer.confirm(f"This will erase all data in: {target_url}. Continue?")
-        if not confirmed:
-            typer.echo("Cancelled.")
-            raise typer.Exit(code=1)
-
-    engine = create_engine(target_url, future=True)
-    from assistant.db import models  # noqa: F401
-
-    mode = schema_mode.strip().lower()
-    if mode == "orm":
-        reflected = MetaData()
-        reflected.reflect(bind=engine)
-        reflected.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
-        typer.echo(f"Database reset using ORM schema: {target_url}")
-        return
-
-    if mode == "sql":
-        if schema_file is None:
-            typer.echo("When --schema-mode=sql, --schema-file is required.")
-            raise typer.Exit(code=2)
-        if not schema_file.exists():
-            typer.echo(f"Schema file not found: {schema_file}")
-            raise typer.Exit(code=2)
-        if not target_url.startswith("sqlite"):
-            typer.echo("SQL schema mode currently supports only sqlite URLs.")
-            raise typer.Exit(code=2)
-
-        with engine.begin() as conn:
-            table_names = conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-            ).scalars().all()
-            for table_name in table_names:
-                conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
-
-        raw = engine.raw_connection()
-        try:
-            script = schema_file.read_text(encoding="utf-8")
-            raw.executescript(script)
-            raw.commit()
-        finally:
-            raw.close()
-        typer.echo(f"Database reset using SQL schema file: {schema_file}")
-        return
-
-    typer.echo("Invalid --schema-mode. Use 'orm' or 'sql'.")
-    raise typer.Exit(code=2)
+    _run_db_reset(target_url=target_url, schema_mode=schema_mode, schema_file=schema_file, yes=yes)
 
 
 if __name__ == "__main__":
