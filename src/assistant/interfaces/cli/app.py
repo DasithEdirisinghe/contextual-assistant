@@ -62,14 +62,33 @@ def _run_cards_list(limit: int) -> None:
         )
 
 
-def _run_envelopes_list() -> None:
+def _truncate(text: str, max_len: int = 100) -> str:
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 3]}..."
+
+
+def _run_envelopes_list(cards_per_envelope: int = 5) -> None:
     with SessionLocal() as session:
         rows = session.query(EnvelopeORM).order_by(EnvelopeORM.updated_at.desc()).all()
-    for row in rows:
-        typer.echo(
-            f"[{row.id}] {row.name} | cards={row.card_count} | "
-            f"keywords={','.join((row.keywords_json or [])[:5]) or '-'} | {row.summary or '-'}"
-        )
+        for row in rows:
+            typer.echo(
+                f"[{row.id}] {row.name} | cards={row.card_count} | "
+                f"keywords={','.join((row.keywords_json or [])[:5]) or '-'} | {row.summary or '-'}"
+            )
+            cards = (
+                session.query(CardORM)
+                .filter(CardORM.envelope_id == row.id)
+                .order_by(CardORM.created_at.desc())
+                .limit(cards_per_envelope)
+                .all()
+            )
+            if not cards:
+                typer.echo("  - (no cards)")
+            else:
+                for card in cards:
+                    typer.echo(f"  - card[{card.id}] {card.card_type}: {_truncate(card.description)}")
+            typer.echo("")
 
 
 def _run_envelope_show(envelope_id: int) -> None:
@@ -136,8 +155,15 @@ def cards_list(limit: int = 20) -> None:
 
 
 @app.command("envelopes-list")
-def envelopes_list() -> None:
-    _run_envelopes_list()
+def envelopes_list(
+    cards_per_envelope: int = typer.Option(
+        5,
+        "--cards-per-envelope",
+        min=1,
+        help="Number of recent cards to show per envelope.",
+    )
+) -> None:
+    _run_envelopes_list(cards_per_envelope)
 
 
 @app.command("envelope-show")
@@ -194,7 +220,7 @@ def _interactive_help() -> None:
                 "  help",
                 "  ingest <note>",
                 "  cards [limit]",
-                "  envelopes",
+                "  envelopes [cards_per_envelope]",
                 "  envelope <id>",
                 "  context [--derived] [limit]",
                 "  thinking-run",
@@ -338,7 +364,15 @@ def interactive(
                 limit = int(args[0]) if args else 20
                 _run_cards_list(limit)
             elif cmd == "envelopes":
-                _run_envelopes_list()
+                try:
+                    cards_per_envelope = int(args[0]) if args else 5
+                except ValueError:
+                    _warn("usage: envelopes [cards_per_envelope]")
+                    continue
+                if cards_per_envelope < 1:
+                    _warn("cards_per_envelope must be >= 1")
+                    continue
+                _run_envelopes_list(cards_per_envelope)
             elif cmd == "envelope":
                 if not args:
                     _warn("usage: envelope <id>")

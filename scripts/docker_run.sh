@@ -36,12 +36,16 @@ if [[ "$#" -gt 0 ]]; then
   docker run --rm -it \
     --env-file "$ENV_FILE" \
     --add-host=host.docker.internal:host-gateway \
+    -v "$ROOT_DIR/src:/app/src" \
+    -v "$ROOT_DIR/scripts:/app/scripts" \
     -v "$ROOT_DIR/data:/app/data" \
     "$IMAGE_NAME" "$@"
 else
   docker run --rm -it \
     --env-file "$ENV_FILE" \
     --add-host=host.docker.internal:host-gateway \
+    -v "$ROOT_DIR/src:/app/src" \
+    -v "$ROOT_DIR/scripts:/app/scripts" \
     -v "$ROOT_DIR/data:/app/data" \
     "$IMAGE_NAME"
 fi

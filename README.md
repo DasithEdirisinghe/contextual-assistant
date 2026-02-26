@@ -64,6 +64,10 @@ ENV_FILE=.env.docker.local ./scripts/docker_run.sh
 ```
 (Or use `ENV_FILE=.env.docker` if you keep defaults there.)
 
+Development note:
+- `scripts/docker_run.sh` bind-mounts `src/` and `scripts/`, so code changes are available immediately after restarting the container.
+- Rebuild image (`docker build ...`) only when dependencies or Dockerfile-level setup changes.
+
 What happens after launch:
 - The container starts the interactive CLI prompt.
 - You enter commands directly in that shell.
@@ -73,7 +77,7 @@ What happens after launch:
 Example commands inside interactive CLI:
 - `ingest "Call Sarah about Q3 budget next Monday"`: Ingests a raw note and runs ingestion -> organization -> context update pipeline.
 - `cards`: Lists recent cards with type, due date, envelope link, keywords, and assignee.
-- `envelopes`: Lists envelopes with card count, top keywords, and summary.
+- `envelopes [cards_per_envelope]`: Lists envelopes and previews recent cards in each envelope (default 5).
 - `context`: Shows the persisted user context snapshot (`user_context`).
 - `thinking-start 3600`: Starts background thinking scheduler (every 3600 seconds).
 - `thinking-status`: Shows whether thinking scheduler is running and current interval.
