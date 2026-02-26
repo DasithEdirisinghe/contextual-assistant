@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session, aliased
 
 from assistant.db.models import CardORM, EnvelopeORM
 
@@ -21,69 +22,103 @@ class ContextEvidenceCard:
     created_at: datetime
 
 
-def _importance_score(card: CardORM) -> float:
-    score = 0.0
-    if card.card_type == "task":
-        score += 2.0
-    elif card.card_type == "reminder":
-        score += 1.5
-    if card.due_at is not None:
-        score += 1.0
-    if card.assignee_text:
-        score += 0.6
-    score += min(len(card.keywords_json or []), 5) * 0.15
-    return score
-
-
 def build_context_evidence(session: Session, *, max_cards: int = 12) -> list[ContextEvidenceCard]:
-    cards = session.query(CardORM).order_by(CardORM.created_at.desc()).limit(120).all()
-    if not cards:
+    # Query A: latest global cards (fixed window used by existing behavior).
+    latest_ids = [
+        row[0]
+        for row in (
+            session.query(CardORM.id)
+            .order_by(CardORM.created_at.desc())
+            .limit(6)
+            .all()
+        )
+    ]
+    if not latest_ids:
         return []
 
-    envelopes = session.query(EnvelopeORM).order_by(EnvelopeORM.card_count.desc(), EnvelopeORM.updated_at.desc()).limit(8).all()
-    card_map = {c.id: c for c in cards}
-    selected_ids: list[int] = []
+    # Query B: active envelopes.
+    active_envelope_ids = [
+        row[0]
+        for row in (
+            session.query(EnvelopeORM.id)
+            .order_by(EnvelopeORM.card_count.desc(), EnvelopeORM.updated_at.desc())
+            .limit(8)
+            .all()
+        )
+    ]
 
-    # Most recent globally.
-    for card in cards[:6]:
-        selected_ids.append(card.id)
+    selected_ids = list(latest_ids)
 
-    # Most important per active envelope.
-    for env in envelopes:
-        env_cards = [c for c in cards if c.envelope_id == env.id]
-        if not env_cards:
-            continue
-        important = sorted(env_cards, key=_importance_score, reverse=True)[0]
-        selected_ids.append(important.id)
+    # Query C: top-important card per active envelope using window function.
+    if active_envelope_ids:
+        keyword_count = func.coalesce(func.json_array_length(CardORM.keywords_json), 0)
+        importance_score = (
+            case((CardORM.card_type == "task", 2.0), (CardORM.card_type == "reminder", 1.5), else_=0.0)
+            + case((CardORM.due_at.is_not(None), 1.0), else_=0.0)
+            + case((CardORM.assignee_text.is_not(None), 0.6), else_=0.0)
+            + case((keyword_count > 5, 5), else_=keyword_count) * 0.15
+        )
+
+        ranked = (
+            session.query(
+                CardORM.id.label("card_id"),
+                CardORM.envelope_id.label("envelope_id"),
+                func.row_number()
+                .over(
+                    partition_by=CardORM.envelope_id,
+                    order_by=(importance_score.desc(), CardORM.created_at.desc()),
+                )
+                .label("rn"),
+            )
+            .filter(CardORM.envelope_id.in_(active_envelope_ids))
+            .subquery()
+        )
+
+        ranked_alias = aliased(ranked)
+        top_per_env_ids = [
+            row[0]
+            for row in (
+                session.query(ranked_alias.c.card_id)
+                .filter(ranked_alias.c.rn == 1)
+                .order_by(ranked_alias.c.envelope_id.asc())
+                .all()
+            )
+        ]
+        selected_ids.extend(top_per_env_ids)
 
     # Deduplicate in insertion order and cap.
-    deduped: list[int] = []
-    seen = set()
+    deduped_ids: list[int] = []
+    seen: set[int] = set()
     for cid in selected_ids:
         if cid in seen:
             continue
         seen.add(cid)
-        deduped.append(cid)
-        if len(deduped) >= max_cards:
+        deduped_ids.append(cid)
+        if len(deduped_ids) >= max_cards:
             break
 
-    evidence: list[ContextEvidenceCard] = []
-    for cid in deduped:
-        card = card_map.get(cid)
-        if card is None:
-            continue
-        envelope_name = card.envelope.name if card.envelope is not None else None
-        evidence.append(
-            ContextEvidenceCard(
-                card_id=card.id,
-                card_type=card.card_type,
-                description=card.description,
-                assignee=card.assignee_text,
-                keywords=card.keywords_json or [],
-                due_at=card.due_at,
-                envelope_id=card.envelope_id,
-                envelope_name=envelope_name,
-                created_at=card.created_at,
-            )
+    if not deduped_ids:
+        return []
+
+    # Query D: fetch selected cards + envelope name in one query.
+    rows = (
+        session.query(CardORM, EnvelopeORM.name)
+        .outerjoin(EnvelopeORM, CardORM.envelope_id == EnvelopeORM.id)
+        .filter(CardORM.id.in_(deduped_ids))
+        .all()
+    )
+    by_id = {
+        card.id: ContextEvidenceCard(
+            card_id=card.id,
+            card_type=card.card_type,
+            description=card.description,
+            assignee=card.assignee_text,
+            keywords=card.keywords_json or [],
+            due_at=card.due_at,
+            envelope_id=card.envelope_id,
+            envelope_name=envelope_name,
+            created_at=card.created_at,
         )
-    return evidence
+        for card, envelope_name in rows
+    }
+    return [by_id[cid] for cid in deduped_ids if cid in by_id]

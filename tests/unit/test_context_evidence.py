@@ -38,3 +38,6 @@ def test_context_evidence_selector_returns_bounded_deduped_cards() -> None:
         ids = [e.card_id for e in evidence]
         assert len(evidence) <= 12
         assert len(ids) == len(set(ids))
+        # Current semantics: include latest global cards and important per active envelope.
+        latest_six_ids = [c.id for c in session.query(CardORM).order_by(CardORM.created_at.desc()).limit(6).all()]
+        assert set(latest_six_ids).issubset(set(ids))

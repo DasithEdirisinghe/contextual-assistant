@@ -11,8 +11,11 @@ class EnvelopesRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def list_envelopes(self) -> list[EnvelopeORM]:
-        return self.session.query(EnvelopeORM).order_by(EnvelopeORM.updated_at.desc()).all()
+    def list_envelopes(self, limit: int | None = None) -> list[EnvelopeORM]:
+        query = self.session.query(EnvelopeORM).order_by(EnvelopeORM.updated_at.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
 
     def get_by_name(self, name: str) -> EnvelopeORM | None:
         return self.session.query(EnvelopeORM).filter(EnvelopeORM.name == name).one_or_none()

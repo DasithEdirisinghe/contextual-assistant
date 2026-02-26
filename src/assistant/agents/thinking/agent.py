@@ -38,7 +38,7 @@ class ThinkingAgent:
         )
 
     def _serialize_cards(self) -> list[dict]:
-        cards = self.cards_repo.list_cards()[: max(1, self.settings.thinking_max_cards)]
+        cards = self.cards_repo.list_cards(limit=max(1, self.settings.thinking_max_cards))
         return [
             {
                 "id": c.id,
@@ -54,7 +54,7 @@ class ThinkingAgent:
         ]
 
     def _serialize_envelopes(self) -> list[dict]:
-        envelopes = self.envelopes_repo.list_envelopes()[: max(1, self.settings.thinking_max_envelopes)]
+        envelopes = self.envelopes_repo.list_envelopes(limit=max(1, self.settings.thinking_max_envelopes))
         return [
             {
                 "id": e.id,

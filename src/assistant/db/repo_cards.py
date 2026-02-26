@@ -36,8 +36,11 @@ class CardsRepository:
         self.session.flush()
         return card
 
-    def list_cards(self) -> list[CardORM]:
-        return self.session.query(CardORM).order_by(CardORM.created_at.desc()).all()
+    def list_cards(self, limit: int | None = None) -> list[CardORM]:
+        query = self.session.query(CardORM).order_by(CardORM.created_at.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
 
     def list_by_envelope(self, envelope_id: int, limit: int | None = None) -> list[CardORM]:
         query = self.session.query(CardORM).filter(CardORM.envelope_id == envelope_id).order_by(CardORM.created_at.desc())
