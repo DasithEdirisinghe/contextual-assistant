@@ -6,13 +6,28 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class ContextSignal(BaseModel):
-    entity_type: str
-    canonical_name: str
+class ContextItem(BaseModel):
+    name: str
     strength: float
-    mention_count: int
+    evidence_card_ids: list[int] = Field(default_factory=list)
     last_seen_at: Optional[datetime] = None
 
 
-class UserContext(BaseModel):
-    signals: list[ContextSignal] = Field(default_factory=list)
+class ImportantUpcomingItem(BaseModel):
+    card_id: int
+    title: str
+    reason: str
+
+
+class StructuredUserContext(BaseModel):
+    people: list[ContextItem] = Field(default_factory=list)
+    organizations: list[ContextItem] = Field(default_factory=list)
+    projects: list[ContextItem] = Field(default_factory=list)
+    themes: list[ContextItem] = Field(default_factory=list)
+    important_upcoming: list[ImportantUpcomingItem] = Field(default_factory=list)
+    miscellaneous: list[ContextItem] = Field(default_factory=list)
+
+
+class ContextUpdateOutput(BaseModel):
+    context: StructuredUserContext
+    focus_summary: str

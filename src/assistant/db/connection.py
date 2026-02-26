@@ -40,9 +40,39 @@ def _ensure_envelopes_profile_columns() -> None:
                 conn.execute(text(stmt))
 
 
+def _ensure_user_context_table() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "user_context" in inspector.get_table_names():
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE user_context (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    context_json TEXT NOT NULL,
+                    focus_summary TEXT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+
+
+def _drop_legacy_thinking_tables() -> None:
+    # Thinking suggestions are now file artifacts; drop obsolete tables when present.
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS thinking_suggestions"))
+        conn.execute(text("DROP TABLE IF EXISTS thinking_runs"))
+
+
 def init_db() -> None:
     from assistant.db import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _ensure_cards_reasoning_steps_column()
     _ensure_envelopes_profile_columns()
+    _ensure_user_context_table()
+    _drop_legacy_thinking_tables()

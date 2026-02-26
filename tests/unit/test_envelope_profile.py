@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 
+from assistant.agents.organization.profile import build_envelope_profile
 from assistant.config.settings import Settings
 from assistant.db.models import CardORM
-from assistant.services.envelope_profile import build_envelope_profile
 
 
 def test_build_envelope_profile_derives_keywords_and_count() -> None:

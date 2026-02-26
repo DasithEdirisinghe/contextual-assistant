@@ -1,81 +1,87 @@
 from datetime import datetime
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from assistant.agents.thinking_agent import ThinkingAgent
+from assistant.agents.thinking.agent import ThinkingAgent
+from assistant.agents.thinking.artifacts import list_artifacts, write_run
 from assistant.config.settings import Settings
 from assistant.db.base import Base
-from assistant.db.models import CardORM, EnvelopeORM
+from assistant.db.models import CardORM, EnvelopeORM, UserContextORM
 
 
-def test_thinking_cycle_creates_suggestions_and_dedups() -> None:
+class _FakeStructuredInvoker:
+    def invoke(self, _prompt: str):
+        return {
+            "suggestions": [
+                {
+                    "suggestion_type": "next_step",
+                    "title": "Start Q3 Budget Draft",
+                    "message": "Complete card #1 before other budget tasks.",
+                    "priority": "high",
+                    "score": 0.88,
+                    "reasoning_steps": [
+                        "Card #1 has near-term due date.",
+                        "It is a prerequisite for related envelope tasks.",
+                    ],
+                    "evidence": {"card_ids": [1], "envelope_ids": [1], "context_keys": ["projects"]},
+                }
+            ]
+        }
+
+
+class _FakeLLM:
+    def with_structured_output(self, _schema):
+        return _FakeStructuredInvoker()
+
+
+def test_thinking_cycle_generates_artifact_and_schema_without_db_persistence(monkeypatch, tmp_path) -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
-    settings = Settings(database_url="sqlite+pysqlite:///:memory:")
+    monkeypatch.setattr("assistant.agents.thinking.agent.build_chat_model", lambda _settings: _FakeLLM())
+    settings = Settings(
+        _env_file=None,
+        THINKING_PROMPT_VERSION="thinking.v1",
+        THINKING_OUTPUT_DIR=str(tmp_path),
+    )
 
     with Session() as session:
         env = EnvelopeORM(name="Q3 Budget", summary="finance")
         session.add(env)
         session.flush()
-
-        session.add_all(
-            [
-                CardORM(
-                    raw_text="Call Sarah about budget",
-                    card_type="task",
-                    description="Call Sarah about budget",
-                    due_at=datetime(2026, 3, 1, 9, 0, 0),
-                    assignee_text="Sarah",
-                    keywords_json=["budget"],
-                    envelope_id=env.id,
-                ),
-                CardORM(
-                    raw_text="Send Sarah budget email",
-                    card_type="task",
-                    description="Send Sarah budget email",
-                    due_at=datetime(2026, 3, 1, 13, 0, 0),
-                    assignee_text="Sarah",
-                    keywords_json=["budget"],
-                    envelope_id=env.id,
-                ),
-                CardORM(
-                    raw_text="Idea budget dashboard",
-                    card_type="idea_note",
-                    description="Budget dashboard",
-                    due_at=None,
-                    assignee_text=None,
-                    keywords_json=["idea"],
-                    envelope_id=env.id,
-                ),
-                CardORM(
-                    raw_text="Idea budget workshop",
-                    card_type="idea_note",
-                    description="Budget workshop",
-                    due_at=None,
-                    assignee_text=None,
-                    keywords_json=["idea"],
-                    envelope_id=env.id,
-                ),
-                CardORM(
-                    raw_text="Idea budget summary",
-                    card_type="idea_note",
-                    description="Budget summary",
-                    due_at=None,
-                    assignee_text=None,
-                    keywords_json=["idea"],
-                    envelope_id=env.id,
-                ),
-            ]
+        session.add(
+            CardORM(
+                raw_text="Prepare budget draft",
+                card_type="task",
+                description="Prepare budget draft",
+                due_at=datetime(2026, 3, 1, 9, 0, 0),
+                assignee_text="Sarah",
+                keywords_json=["budget", "q3"],
+                envelope_id=env.id,
+            )
+        )
+        session.add(
+            UserContextORM(
+                id=1,
+                context_json='{"projects":[{"name":"Q3 Budget","strength":0.9}]}',
+                focus_summary="Q3 budget delivery",
+                updated_at=datetime.utcnow(),
+            )
         )
         session.commit()
 
-        service = ThinkingAgent(session, settings)
-        first = service.run_cycle().model_dump()
-        second = service.run_cycle().model_dump()
+        output = ThinkingAgent(session, settings).run_cycle()
+        artifact = write_run(output, settings.thinking_output_dir)
+        rows = list_artifacts(settings.thinking_output_dir, limit=10)
 
-        assert first["created"] >= 2
-        assert second["created"] == 0
-        assert second["dedup_skipped"] >= first["created"]
+    assert artifact.exists()
+    assert len(output.suggestions) == 1
+    assert output.prompt_version == "thinking.v1"
+    assert rows and rows[0].suggestions_count == 1
+
+    # Ensure schema no longer includes obsolete thinking persistence tables.
+    table_names = set(inspect(engine).get_table_names())
+    assert "thinking_runs" not in table_names
+    assert "thinking_suggestions" not in table_names

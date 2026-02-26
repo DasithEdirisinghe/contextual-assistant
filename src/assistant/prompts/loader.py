@@ -32,9 +32,21 @@ def load_registry(prompt_id: str = "ingestion") -> dict[str, Any]:
     if not REGISTRY_PATH.exists():
         raise FileNotFoundError(f"Prompt registry not found: {REGISTRY_PATH}")
     data = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-    if data.get("prompt_id") != prompt_id:
-        raise ValueError(f"Registry prompt_id mismatch: expected '{prompt_id}', found '{data.get('prompt_id')}'")
-    return data
+    # Backward-compatible read: old single-prompt registry shape.
+    if "prompts" not in data:
+        if data.get("prompt_id") != prompt_id:
+            raise ValueError(f"Registry prompt_id mismatch: expected '{prompt_id}', found '{data.get('prompt_id')}'")
+        return data
+
+    prompts = data.get("prompts")
+    if not isinstance(prompts, dict):
+        raise ValueError("Registry malformed: 'prompts' must be a mapping")
+    prompt_block = prompts.get(prompt_id)
+    if not isinstance(prompt_block, dict):
+        raise ValueError(f"Unknown prompt_id '{prompt_id}' in registry")
+    # Normalize to per-prompt shape expected by existing helpers.
+    normalized = {"prompt_id": prompt_id, **prompt_block}
+    return normalized
 
 
 def resolve_prompt_version(prompt_id: str, requested_version: str | None = None) -> str:

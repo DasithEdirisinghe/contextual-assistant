@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel, Field
 
 from assistant.config.settings import Settings
 from assistant.db.models import CardORM, EnvelopeORM
 from assistant.llm.client import build_chat_model
-from assistant.prompts import load_prompt
-
-import logging
+from assistant.prompts import load_prompt_versioned, resolve_prompt_version
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,13 @@ class EnvelopeRefineOutput(BaseModel):
 class EnvelopeRefiner:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.prompt_version = resolve_prompt_version("envelope_refine", settings.envelope_refine_prompt_version)
+        logger.debug(
+            "EnvelopeRefiner init: prompt_version=%s llm_provider=%s llm_model=%s",
+            self.prompt_version,
+            self.settings.effective_llm_provider,
+            self.settings.effective_llm_model,
+        )
 
     def _llm_enabled(self) -> bool:
         provider = self.settings.effective_llm_provider
@@ -45,8 +52,9 @@ class EnvelopeRefiner:
         card_lines = "\n".join(
             f"- {card.description}" for card in cards[:12] if card.description
         ).strip()
-        prompt = load_prompt(
-            "envelope_refine.jinja",
+        prompt = load_prompt_versioned(
+            "envelope_refine",
+            version=self.prompt_version,
             envelope_name=envelope.name,
             envelope_summary=envelope.summary or "",
             card_descriptions=card_lines or "- (none)",

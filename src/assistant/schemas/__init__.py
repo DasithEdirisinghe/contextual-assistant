@@ -1,7 +1,16 @@
 from assistant.schemas.card import Card, CardType, ExtractedCard, IngestResult, ResolvedDate
-from assistant.schemas.context import ContextSignal, UserContext
+from assistant.schemas.context import ContextItem, ContextUpdateOutput, ImportantUpcomingItem, StructuredUserContext
 from assistant.schemas.envelope import Envelope, EnvelopeDecision
-from assistant.schemas.suggestion import Suggestion, SuggestionType, ThinkingRunSummary
+from assistant.schemas.suggestion import (
+    SuggestionPriority,
+    SuggestionType,
+    ThinkingArtifactRecord,
+    ThinkingEvidence,
+    ThinkingInputStats,
+    ThinkingRunOutput,
+    ThinkingSuggestionBatch,
+    ThinkingSuggestionItem,
+)
 
 __all__ = [
     "Card",
@@ -11,9 +20,16 @@ __all__ = [
     "ResolvedDate",
     "Envelope",
     "EnvelopeDecision",
-    "ContextSignal",
-    "UserContext",
-    "Suggestion",
+    "ContextItem",
+    "ImportantUpcomingItem",
+    "StructuredUserContext",
+    "ContextUpdateOutput",
+    "SuggestionPriority",
     "SuggestionType",
-    "ThinkingRunSummary",
+    "ThinkingEvidence",
+    "ThinkingSuggestionItem",
+    "ThinkingInputStats",
+    "ThinkingRunOutput",
+    "ThinkingSuggestionBatch",
+    "ThinkingArtifactRecord",
 ]

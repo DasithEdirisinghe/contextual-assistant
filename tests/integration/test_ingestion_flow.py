@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from assistant.config.settings import Settings
 from assistant.pipeline.orchestrator import AssistantOrchestrator
 from assistant.db.base import Base
-from assistant.db.models import CardORM, EnvelopeORM, IngestionEventORM
+from assistant.db.models import CardORM, EnvelopeORM, IngestionEventORM, UserContextORM
 
 
 def test_ingestion_creates_card_and_envelope() -> None:
@@ -17,7 +17,7 @@ def test_ingestion_creates_card_and_envelope() -> None:
         llm_provider="openai",
         llm_api_key=None,
         database_url="sqlite+pysqlite:///:memory:",
-        INGESTION_PROMPT_VERSION="ingestion.extract.v7",
+        INGESTION_PROMPT_VERSION="ingestion.extract.v10",
     )
 
     with Session() as session:
@@ -27,6 +27,7 @@ def test_ingestion_creates_card_and_envelope() -> None:
         cards = session.query(CardORM).all()
         envelopes = session.query(EnvelopeORM).all()
         events = session.query(IngestionEventORM).all()
+        context_rows = session.query(UserContextORM).all()
 
     assert result.card.id > 0
     assert len(cards) == 1
@@ -39,7 +40,8 @@ def test_ingestion_creates_card_and_envelope() -> None:
     assert isinstance(cards[0].reasoning_steps_json, list)
     assert len(cards[0].reasoning_steps_json) >= 1
     assert len(events) == 1
-    assert events[0].prompt_version == "ingestion.extract.v7"
+    assert events[0].prompt_version == "ingestion.extract.v10"
+    assert len(context_rows) <= 1
 
 
 def test_ingestion_invalid_prompt_version_fails_fast() -> None:
@@ -55,6 +57,5 @@ def test_ingestion_invalid_prompt_version_fails_fast() -> None:
     )
 
     with Session() as session:
-        orchestrator = AssistantOrchestrator(session, settings)
         with pytest.raises(ValueError, match="Unknown prompt version"):
-            orchestrator.ingest_note("Call Sarah about the Q3 budget next Monday")
+            AssistantOrchestrator(session, settings)

@@ -29,20 +29,20 @@ class EnvelopeScorer:
 
     def score(
         self,
-        raw_text: str,
+        card_description: str,
         card_keywords: list[str],
         envelope: EnvelopeORM,
         card_embedding: list[float] | None = None,
         assignee: str | None = None,
     ) -> tuple[float, str]:
         env_text = f"{envelope.name} {envelope.summary or ''}".strip()
-        card_vec = card_embedding if card_embedding is not None else model_embed(raw_text, settings=self.settings)
+        card_vec = card_embedding if card_embedding is not None else model_embed(card_description, settings=self.settings)
         env_vec = envelope.embedding_vector_json or []
         if card_vec and env_vec:
             sim = similarity(card_vec, env_vec)
             logger.debug("EnvelopeScorer: similarity=%s for envelope=%s", sim, envelope.name)
         else:
-            sim = semantic_similarity(raw_text, env_text, settings=self.settings)
+            sim = semantic_similarity(card_description, env_text, settings=self.settings)
             logger.debug("EnvelopeScorer: semantic_similarity=%s for envelope=%s", sim, envelope.name)
 
         envelope_keywords = [w.lower() for w in (envelope.keywords_json or []) if w]
@@ -67,7 +67,7 @@ class EnvelopeScorer:
 
     def choose_best(
         self,
-        raw_text: str,
+        card_description: str,
         card_keywords: list[str],
         envelopes: list[EnvelopeORM],
         card_embedding: list[float] | None = None,
@@ -80,7 +80,7 @@ class EnvelopeScorer:
         best_reason = ""
         for envelope in envelopes:
             score, reason = self.score(
-                raw_text, card_keywords, envelope, card_embedding=card_embedding, assignee=assignee
+                card_description, card_keywords, envelope, card_embedding=card_embedding, assignee=assignee
             )
             logger.debug("EnvelopeScorer: score=%s, reason=%s for envelope=%s", score, reason, envelope.name)
             if score > best_score:

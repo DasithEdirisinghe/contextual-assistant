@@ -40,14 +40,15 @@ def test_load_prompt_versioned_specific_snapshot() -> None:
 
 
 def test_prompt_registry_integrity() -> None:
-    registry = load_registry("ingestion")
-    assert registry["prompt_id"] == "ingestion"
-    assert registry["current_template"]
-    versions = registry["versions"]
-    assert any(v["version"] == registry["current_version"] for v in versions)
-    for version in versions:
-        template_file = Path("src/assistant/prompts") / version["template_file"]
-        assert template_file.exists()
+    for prompt_id in ["ingestion", "envelope_refine", "context_update", "thinking"]:
+        registry = load_registry(prompt_id)
+        assert registry["prompt_id"] == prompt_id
+        assert registry["current_template"]
+        versions = registry["versions"]
+        assert any(v["version"] == registry["current_version"] for v in versions)
+        for version in versions:
+            template_file = Path("src/assistant/prompts") / version["template_file"]
+            assert template_file.exists()
 
 
 def test_prompt_version_consistency() -> None:
@@ -56,23 +57,28 @@ def test_prompt_version_consistency() -> None:
 
 
 def test_current_alias_matches_current_template_snapshot() -> None:
-    registry = load_registry("ingestion")
     prompts_dir = Path("src/assistant/prompts")
-    alias = (prompts_dir / "ingestion.jinja").read_text(encoding="utf-8")
-    current = (prompts_dir / registry["current_template"]).read_text(encoding="utf-8")
-    assert alias == current
+    for prompt_id in ["ingestion", "envelope_refine", "context_update", "thinking"]:
+        registry = load_registry(prompt_id)
+        alias = (prompts_dir / f"{prompt_id}.jinja").read_text(encoding="utf-8")
+        current = (prompts_dir / registry["current_template"]).read_text(encoding="utf-8")
+        assert alias == current
 
 
 def test_snapshot_immutability_guard_with_sha256() -> None:
-    registry = load_registry("ingestion")
     prompts_dir = Path("src/assistant/prompts")
-    for version in registry["versions"]:
-        template = prompts_dir / version["template_file"]
-        assert file_sha256(template) == version["sha256"]
+    for prompt_id in ["ingestion", "envelope_refine", "context_update", "thinking"]:
+        registry = load_registry(prompt_id)
+        for version in registry["versions"]:
+            template = prompts_dir / version["template_file"]
+            assert file_sha256(template) == version["sha256"]
 
 
 def test_resolve_prompt_version_with_explicit_valid_version() -> None:
     assert resolve_prompt_version("ingestion", "ingestion.extract.v7") == "ingestion.extract.v7"
+    assert resolve_prompt_version("envelope_refine", "envelope_refine.v1") == "envelope_refine.v1"
+    assert resolve_prompt_version("context_update", "context_update.v1") == "context_update.v1"
+    assert resolve_prompt_version("thinking", "thinking.v1") == "thinking.v1"
 
 
 def test_resolve_prompt_version_invalid_raises() -> None:

@@ -1,6 +1,6 @@
-from assistant.agents.context_agent import ContextAgent
-from assistant.agents.ingestion_agent import IngestionAgent
-from assistant.agents.organization_agent import OrganizationAgent
-from assistant.agents.thinking_agent import ThinkingAgent
+from assistant.agents.context.agent import ContextAgent
+from assistant.agents.ingestion.agent import IngestionAgent
+from assistant.agents.organization.agent import OrganizationAgent
+from assistant.agents.thinking.agent import ThinkingAgent
 
 __all__ = ["IngestionAgent", "OrganizationAgent", "ContextAgent", "ThinkingAgent"]

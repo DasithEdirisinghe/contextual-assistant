@@ -7,9 +7,9 @@ from assistant.db.repo_cards import CardsRepository
 from assistant.db.repo_envelopes import EnvelopesRepository
 from assistant.schemas.card import ExtractedCard
 from assistant.schemas.envelope import EnvelopeDecision
+from assistant.agents.organization.profile import build_envelope_profile
+from assistant.agents.organization.refiner import EnvelopeRefiner
 from assistant.services.embeddings import model_embed
-from assistant.services.envelope_profile import build_envelope_profile
-from assistant.services.envelope_refiner import EnvelopeRefiner
 from assistant.services.scoring import EnvelopeScorer
 
 
