@@ -56,56 +56,6 @@ Notes:
   - `KEYWORD_WEIGHT`
   - `ENTITY_WEIGHT`
 
-## Prompt Versioning (Per Agent)
-
-Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
-
-### 0. Update the active prompt template first
-Before releasing a new version, edit the active alias file for that agent:
-- `src/assistant/prompts/ingestion.jinja`
-- `src/assistant/prompts/envelope_refine.jinja`
-- `src/assistant/prompts/context_update.jinja`
-- `src/assistant/prompts/thinking.jinja`
-
-### 1. Create a new prompt version
-Use the generic release script:
-
-```bash
-python scripts/release_prompt.py \
-  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
-  --changelog "short change summary" \
-  --owner "<your_name_or_team>"
-```
-
-Examples:
-
-```bash
-python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
-```
-
-What this does:
-- creates immutable snapshot `<prompt_id>.vN.jinja`
-- updates active alias `<prompt_id>.jinja`
-- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
-
-### 2. Activate a prompt version via env
-Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
-
-```env
-INGESTION_PROMPT_VERSION=ingestion.extract.v10
-ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
-CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
-THINKING_PROMPT_VERSION=thinking.v1
-```
-
-Rules:
-- env override set -> that exact version is used
-- env override unset -> registry `current_version` is used
-- invalid version -> fail-fast error at runtime
-
 ## Run the App (Interactive)
 
 Start the interactive assistant:
@@ -260,3 +210,55 @@ The ingestion workflow consists of three main agents working synchronously.
 - Output: structured suggestion bundle with run metadata.
 - Stored in: JSON artifacts under `data/thinking_runs` (not persisted in DB suggestion tables).
 - Why it matters: provides proactive assistant behavior beyond passive note storage.
+
+## Optional: Prompt Versioning (Per Agent)
+
+Use this only if you want to create and test new prompt versions.
+
+Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
+
+### 0. Update the active prompt template first
+Before releasing a new version, edit the active alias file for that agent:
+- `src/assistant/prompts/ingestion.jinja`
+- `src/assistant/prompts/envelope_refine.jinja`
+- `src/assistant/prompts/context_update.jinja`
+- `src/assistant/prompts/thinking.jinja`
+
+### 1. Create a new prompt version
+Use the generic release script:
+
+```bash
+python scripts/release_prompt.py \
+  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
+  --changelog "short change summary" \
+  --owner "<your_name_or_team>"
+```
+
+Examples:
+
+```bash
+python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
+```
+
+What this does:
+- creates immutable snapshot `<prompt_id>.vN.jinja`
+- updates active alias `<prompt_id>.jinja`
+- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
+
+### 2. Activate a prompt version via env
+Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
+
+```env
+INGESTION_PROMPT_VERSION=ingestion.extract.v10
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
+THINKING_PROMPT_VERSION=thinking.v1
+```
+
+Rules:
+- env override set -> that exact version is used
+- env override unset -> registry `current_version` is used
+- invalid version -> fail-fast error at runtime
