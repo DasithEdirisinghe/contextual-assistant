@@ -70,6 +70,16 @@ INGESTION_PROMPT_VERSION=ingestion.extract.v7
 ```
 Invalid prompt versions fail fast at runtime.
 
+### Embedding configuration (optional)
+```env
+# Default is auto: use model-based embeddings when config is valid,
+# otherwise fallback to lexical embeddings.
+EMBEDDING_PROVIDER=auto
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_API_KEY=<optional, falls back to LLM_API_KEY>
+EMBEDDING_BASE_URL=<optional, falls back to LLM_BASE_URL>
+```
+
 ## Run
 ### Initialize DB
 ```bash

@@ -14,6 +14,10 @@ class EnvelopeORM(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    embedding_vector_json: Mapped[list[float]] = mapped_column(JSON, default=list, nullable=False)
+    card_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_card_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

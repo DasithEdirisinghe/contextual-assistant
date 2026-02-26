@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = Field(default=None, alias="LLM_API_KEY")
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
     llm_base_url: Optional[str] = Field(default=None, alias="LLM_BASE_URL")
+    embedding_provider: str = Field(default="auto", alias="EMBEDDING_PROVIDER")
+    embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
+    embedding_api_key: Optional[str] = Field(default=None, alias="EMBEDDING_API_KEY")
+    embedding_base_url: Optional[str] = Field(default=None, alias="EMBEDDING_BASE_URL")
     ingestion_prompt_version: Optional[str] = Field(default=None, alias="INGESTION_PROMPT_VERSION")
     database_url: str = Field(default="sqlite:///assistant.db", alias="DATABASE_URL")
     timezone: str = Field(default="UTC", alias="TIMEZONE")
@@ -35,6 +39,22 @@ class Settings(BaseSettings):
     @property
     def effective_llm_api_key(self) -> Optional[str]:
         return self.llm_api_key
+
+    @property
+    def effective_embedding_provider(self) -> str:
+        return (self.embedding_provider or "auto").strip().lower()
+
+    @property
+    def effective_embedding_model(self) -> str:
+        return self.embedding_model.strip()
+
+    @property
+    def effective_embedding_api_key(self) -> Optional[str]:
+        return self.embedding_api_key or self.llm_api_key
+
+    @property
+    def effective_embedding_base_url(self) -> Optional[str]:
+        return self.embedding_base_url or self.llm_base_url
 
 
 @lru_cache(maxsize=1)

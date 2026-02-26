@@ -28,7 +28,7 @@ class AssistantOrchestrator:
     def ingest_note(self, raw_text: str) -> IngestResult:
         try:
             extracted, model_name, prompt_version, latency_ms, success, error_text = self.ingestion_agent.extract(raw_text)
-            decision, envelope_id = self.organization_agent.route(extracted)
+            decision, envelope_id = self.organization_agent.route(extracted, raw_text)
 
             from assistant.services.datetime import parse_due_at
 
@@ -42,6 +42,8 @@ class AssistantOrchestrator:
                 reasoning_steps=extracted.reasoning_steps,
                 envelope_id=envelope_id,
             )
+            self.organization_agent.refresh_envelope(envelope_id)
+            refreshed_envelope = self.organization_agent.envelopes.get_by_id(envelope_id)
 
             context_updates = self.context_agent.update_from_card(card_orm.id, extracted)
             self.events_repo.log_ingestion(
@@ -66,7 +68,7 @@ class AssistantOrchestrator:
                     reasoning_steps=card_orm.reasoning_steps_json,
                     envelope_id=card_orm.envelope_id,
                 ),
-                envelope_name=decision.envelope_name,
+                envelope_name=(refreshed_envelope.name if refreshed_envelope else decision.envelope_name),
                 match_score=decision.score,
                 reason=decision.reason,
                 context_updates=context_updates,

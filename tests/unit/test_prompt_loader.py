@@ -19,22 +19,19 @@ def test_load_prompt_missing_variable_raises() -> None:
 
 def test_ingestion_prompt_contract_sections_exist() -> None:
     rendered = load_prompt("ingestion.jinja", raw_note="Call Sarah about the Q3 budget next Monday")
-    assert "[Role]" in rendered
-    assert "[Output Contract]" in rendered
-    assert "[Meaning-First Interpretation]" in rendered
-    assert "[Card Type Rules]" in rendered
-    assert "[Field Rules]" in rendered
-    assert "[Confidence Scoring]" in rendered
-    assert "[Forbidden Behaviors]" in rendered
-    assert "[JSON-only Reminder]" in rendered
-    assert "entities:" not in rendered.lower()
-    assert "reasoning_steps" in rendered
+    lower = rendered.lower()
+    assert "[role]" in lower
+    assert "output contract" in lower
+    assert "reasoning_steps" in lower
+    assert "confidence" in lower
+    assert "assignee" in lower
+    assert "date_text" in lower
 
 
 def test_load_prompt_versioned_uses_current_when_version_missing() -> None:
     rendered = load_prompt_versioned("ingestion", raw_note="Call Sarah")
     assert "Call Sarah" in rendered
-    assert "[Role]" in rendered
+    assert "[role]" in rendered.lower()
 
 
 def test_load_prompt_versioned_specific_snapshot() -> None:

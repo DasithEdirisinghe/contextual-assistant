@@ -2,7 +2,7 @@ from assistant.config.settings import Settings
 
 
 def test_settings_ingestion_prompt_version_default_none() -> None:
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.ingestion_prompt_version is None
 
 

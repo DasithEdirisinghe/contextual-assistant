@@ -32,6 +32,9 @@ def test_ingestion_creates_card_and_envelope() -> None:
     assert len(cards) == 1
     assert len(envelopes) == 1
     assert envelopes[0].id == cards[0].envelope_id
+    assert envelopes[0].card_count == 1
+    assert isinstance(envelopes[0].keywords_json, list)
+    assert len(envelopes[0].keywords_json) >= 1
     assert cards[0].due_at is not None
     assert isinstance(cards[0].reasoning_steps_json, list)
     assert len(cards[0].reasoning_steps_json) >= 1

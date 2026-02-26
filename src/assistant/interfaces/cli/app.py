@@ -41,7 +41,7 @@ def cards_list(limit: int = 20) -> None:
         rows = session.query(CardORM).order_by(CardORM.created_at.desc()).limit(limit).all()
     for row in rows:
         typer.echo(
-            f"[{row.id}] {row.card_type} | {row.description} | due={row.due_at} | envelope_id={row.envelope_id} | reasoning_steps={len(row.reasoning_steps_json or [])}"
+            f"[{row.id}] {row.card_type} | {row.description} | due={row.due_at} | envelope_id={row.envelope_id} | keywords={','.join((row.keywords_json or [])[:5]) or '-'} | assignee={row.assignee_text}"
         )
 
 
@@ -50,7 +50,9 @@ def envelopes_list() -> None:
     with SessionLocal() as session:
         rows = session.query(EnvelopeORM).order_by(EnvelopeORM.updated_at.desc()).all()
     for row in rows:
-        typer.echo(f"[{row.id}] {row.name} | {row.summary or '-'}")
+        typer.echo(
+            f"[{row.id}] {row.name} | cards={row.card_count} | keywords={','.join((row.keywords_json or [])[:5]) or '-'} | {row.summary or '-'}"
+        )
 
 
 @app.command("envelope-show")
