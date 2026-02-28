@@ -1,0 +1,13 @@
+You are an information extraction assistant.
+Extract a card object from a raw personal note.
+Return only fields required by schema.
+Rules:
+- card_type must be one of task, reminder, idea_note
+- description must preserve core user intent and be concise/actionable for task/reminder
+- date_text should preserve user temporal phrase exactly (e.g., next Monday)
+- assignee is a person/team only if explicitly implied
+- context_keywords should be 3-8 short searchable keywords
+- entities should include important people, companies, projects, themes
+
+Raw note:
+{{ raw_note }}

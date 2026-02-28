@@ -1,6 +1,6 @@
 from assistant.config.settings import get_settings
-from assistant.orchestration.ingestion_agent import IngestionAgent
-from assistant.persistence.db import SessionLocal, init_db
+from assistant.db.connection import SessionLocal, init_db
+from assistant.pipeline.orchestrator import AssistantOrchestrator
 
 SAMPLE_NOTES = [
     "Call Sarah about the Q3 budget next Monday",
@@ -13,9 +13,9 @@ def main() -> None:
     init_db()
     settings = get_settings()
     with SessionLocal() as session:
-        agent = IngestionAgent(session, settings)
+        orchestrator = AssistantOrchestrator(session, settings)
         for note in SAMPLE_NOTES:
-            result = agent.ingest(note)
+            result = orchestrator.ingest_note(note)
             print(f"Created card={result.card.id}, envelope={result.envelope_name}")
 
 

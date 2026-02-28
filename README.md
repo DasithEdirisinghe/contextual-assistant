@@ -1,110 +1,275 @@
-# Contextual Personal Assistant (Prototype)
+# Contextual Personal Assistant
 
-Python prototype for the assignment: transform unstructured notes into structured cards, auto-organize them into envelopes, and maintain dynamic user context.
+A personal assistant that turns unstructured notes into structured cards, organizes them into envelopes, maintains user context, and generates proactive suggestions.
 
-## Tech Choices
-- Agent orchestration: lightweight modular Python services (LangChain-ready design).
-- Structured extraction: OpenAI + `instructor` + Pydantic schema (single-call extraction).
-- Fallback extraction: deterministic local rules (no API key mode).
-- Storage: SQLite + SQLAlchemy.
-- Interface: Typer CLI.
+## Prerequisites
+- Docker installed and running on host.
+- [Ollama](https://ollama.com/) installed on host.
+- Python 3.11+ is only needed for non-Docker local runs.
 
-## Why this architecture
-- Keeps the system simple and maintainable while preserving depth on core ingestion quality.
-- Uses typed interfaces and strict schema validation to avoid brittle parsing.
-- Supports future scaling through clean boundaries: extraction, matching, context, persistence, orchestration.
+## Step-by-Step Setup (Docker-First)
 
-## Project Structure
-- `src/assistant/interfaces/cli/app.py`: CLI commands
-- `src/assistant/orchestration/ingestion_agent.py`: ingestion pipeline coordinator
-- `src/assistant/ml/extraction/*`: prompt/schema/LLM/fallback extraction
-- `src/assistant/domain/envelopes/matcher.py`: hybrid envelope matching
-- `src/assistant/domain/context/updater.py`: dynamic context refinement
-- `src/assistant/persistence/models.py`: SQLite schema (8 tables)
-- `docs/thinking-agent-design.md`: scheduled Thinking Agent design
-
-## Setup
-1. Create a virtual env and install dependencies:
+1. Clone and enter project root.
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/DasithEdirisinghe/contextual-assistant.git
+cd contextual-assistant
 ```
 
-2. Configure environment:
+2. Build the Docker image.
 ```bash
-cp .env.example .env
+docker build -t contextual-assistant:latest .
 ```
 
-Optional for high-quality extraction:
-- Set `OPENAI_API_KEY` in `.env`.
-- Without key, fallback extractor is used.
-
-## Run
-### Ingest a note
+3. Pull required Ollama models on host.
 ```bash
-PYTHONPATH=src python -m assistant.interfaces.cli.app ingest "Call Sarah about the Q3 budget next Monday"
+ollama pull llama3.1:8b
+ollama pull qwen3-embedding:0.6b
 ```
 
-### View cards
+4. Start Ollama in a separate terminal.
 ```bash
-PYTHONPATH=src python -m assistant.interfaces.cli.app cards-list
+ollama serve
 ```
 
-### View envelopes
-```bash
-PYTHONPATH=src python -m assistant.interfaces.cli.app envelopes-list
-PYTHONPATH=src python -m assistant.interfaces.cli.app envelope-show 1
+## Configuration
+Use `.env.docker` as default, or create `.env.docker.local` and pass it via `ENV_FILE`.
+
+Required keys to verify:
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.1:8b
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=qwen3-embedding:0.6b
+EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
+
+DATABASE_URL=sqlite:///data/assistant-demo.db
 ```
 
-### View context
+Notes:
+- If the DB file does not exist, SQLite creates it automatically.
+- If it exists, the app reuses it.
+- For normal usage, do not change these routing/scoring settings:
+  - `ENVELOPE_ASSIGN_THRESHOLD`
+  - `EMBEDDING_WEIGHT`
+  - `KEYWORD_WEIGHT`
+  - `ENTITY_WEIGHT`
+
+## Run the App (Interactive)
+
+Start the interactive assistant:
 ```bash
-PYTHONPATH=src python -m assistant.interfaces.cli.app context-show
+ENV_FILE=.env.docker.local ./scripts/docker_run.sh
+```
+(Or use `ENV_FILE=.env.docker` if you keep defaults there.)
+
+Development note:
+- `scripts/docker_run.sh` bind-mounts `src/` and `scripts/`, so code changes are available immediately after restarting the container.
+- Rebuild image (`docker build ...`) only when dependencies or Dockerfile-level setup changes.
+
+What happens after launch:
+- The container starts the interactive CLI prompt.
+- You enter commands directly in that shell.
+
+## First-Run Usage
+
+Example commands inside interactive CLI:
+- `db-reset`: Clears and recreates the database schema (with confirmation prompt).
+- `ingest "Call Sarah about Q3 budget next Monday"`: Ingests a raw note and runs ingestion -> organization -> context update pipeline.
+- `cards`: Lists recent cards with type, due date, envelope link, keywords, and assignee.
+- `envelopes [cards_per_envelope]`: Lists envelopes and previews recent cards in each envelope (default 5).
+- `context`: Shows the persisted user context snapshot (`user_context`).
+- `thinking-start 3600`: Starts background thinking scheduler (every 3600 seconds).
+- `thinking-status`: Shows whether thinking scheduler is running and current interval.
+- `thinking-stop`: Stops background thinking scheduler.
+- `artifacts`: Lists generated thinking suggestion artifact files.
+- `show <artifact_path>`: Opens and prints one artifact JSON file.
+- `exit`: Exits interactive CLI.
+
+`exit` stops the CLI session and also stops the in-process thinking scheduler.
+
+### Interactive Demo Sequence
+After the interactive shell starts, you can run this sequence directly:
+
+```text
+ingest "Book a hotel for next week trip with Gibson"
+ingest "Do the Lit review of the TSRGS paper"
+ingest "Buy a birthday present to mike"
+ingest "Discuss the outcome of the TSRGS paper with Paul today"
+ingest "Bring 1 litre of milk when way to home"
+ingest "Ask Paul about his opinion on new research methodology of TSRGS paper"
+ingest "Buy coffee and sugar for home"
+cards
+envelopes
 ```
 
-### Thinking Agent sample output (design-only)
+
+## Architecture & Design
+
+### Why LangChain
+- Runnable-based pipeline is used in this project:
+  - Ingestion is implemented as composable LangChain runnable stages (prompt render -> model call -> parse/normalize), which keeps LLM behavior modular and testable.
+- Schema-safe extraction contracts:
+  - LangChain integrates cleanly with Pydantic structured outputs, so extracted fields map to strict card/context schemas instead of brittle text parsing.
+- Future workflow scaling path:
+  - If orchestration becomes more stateful/branching, this codebase can move naturally to LangGraph while keeping existing LangChain prompt/model/runnable components.
+
+### Why SQLite + SQLAlchemy
+- SQLite is chosen for assignment constraints and local-first execution:
+  - zero external infrastructure,
+  - file-based persistence,
+  - simple Docker + local development workflow.
+- SQLAlchemy is used for explicit schema modeling and repository boundaries:
+  - clear table contracts,
+  - controlled transactions in orchestrator flow,
+  - easier migration of logic from Python loops into SQL queries where needed.
+
+### Database Design
+
+<!-- ![Databse Schema](assets/database_schema.png) -->
+<img src="assets/database_schema.png" alt="Databse Schema" height="400"/>
+
+
+- `cards`:
+  - Core normalized record for each ingested note.
+  - Stores extracted operational fields used downstream (`card_type`, `description`, `due_at`, `assignee_text`, `keywords_json`, `envelope_id`, timestamps, reasoning).
+- `envelopes`:
+  - Represents higher-level grouping context.
+  - Stores envelope profile fields (`name`, `summary`, `keywords_json`, `embedding_vector_json`, `card_count`, `last_card_at`) used for routing and refinement.
+- `user_context`:
+  - Single authoritative snapshot table (`id=1`) for current global user context and focus summary.
+  - Snapshot model is intentional: retrieval is O(1) and no merge across historical rows is required at read time.
+- `ingestion_events`:
+  - Operational traceability for ingestion runs (prompt/model version observability and debugging).
+- Thinking outputs:
+  - Persisted as JSON artifacts in `data/thinking_runs` instead of DB tables to keep scheduled reasoning outputs append-only and easy to inspect/export.
+
+### Database-Level Optimizations Implemented
+- SQL-bounded reads at repository level:
+  - `list_cards(limit=...)` and `list_envelopes(limit=...)` push limits to SQL instead of loading all rows and slicing in Python.
+- SQL-first context evidence selection:
+  - “Important card per envelope” selection is done with SQL window functions (`row_number() over (partition by envelope_id ...)`) instead of Python nested loops.
+  - Final evidence card fetch is done in a consolidated query with required joins.
+- Query-shape optimization over index tuning:
+  - Current optimization strategy focuses on reducing scanned rows and moving ranking/filter logic into SQL.
+  - Explicit ORM index declarations were intentionally not added in this phase (keeps schema simpler until profiling proves index need).
+
+### Pipeline Explanation
+
+Prompt-driven behavior:
+- LLM-backed stages use versioned prompt templates from `src/assistant/prompts/`.
+- Main prompt families:
+  - `ingestion*.jinja` for ingestion extraction
+  - `envelope_refine*.jinja` for envelope profile refinement
+  - `context_update*.jinja` for context snapshot updates
+  - `thinking*.jinja` for scheduled proactive reasoning
+- Active prompt versions are resolved from config (`.env` / `.env.docker`) with registry validation.
+
+
+### High Level Flow Chart
+
+<!-- ![High Level Diagram (mermaid)](assets/high_level_diagram.png) -->
+
+<img src="assets/high_level_diagram.png" alt="High Level Diagram (mermaid)" width="800" />
+
+### Ingestion Workflow
+
+The ingestion workflow consists of three main agents working synchronously.
+
+#### 1. Ingestion Agent
+- **Input:** One raw user note (free text).
+- **Processing:**
+  - Uses the ingestion prompt template to extract:
+    - `card_type`, `description`, `date_text`, `assignee`, `context_keywords`, `reasoning_steps`, `confidence`
+  - Runs deterministic date resolution to convert `date_text` (for example, `next Monday`, `tonight`) into `due_at` when resolvable.
+- **Output:** A validated card object ready for routing and persistence.
+- **Stored in:** `cards` table (`description`, `card_type`, `due_at`, `assignee_text`, `keywords_json`, etc.).
+- **Why it matters:** Converts ambiguous natural language into stable, machine-usable fields for downstream agents.
+
+#### 2. Organization Agent
+- **Input:** Newly extracted card + current envelope set.
+- **Processing:**
+  - Computes envelope match score using embedding similarity + keyword overlap.
+  - Applies threshold-based decision:
+    - assign to best existing envelope, or
+    - create a new envelope when no strong match exists.
+  - Uses envelope refine prompt template to update envelope profile (`name`, `summary`, `keywords`, embedding centroid) as cards accumulate.
+- **Output:** Envelope assignment/creation decision and updated profile values.
+- **Stored in:** `envelopes` table; card row is linked via `cards.envelope_id`.
+- **Why it matters:** Keeps related notes grouped so retrieval and later reasoning operate on coherent context buckets.
+
+#### 3. Context Agent
+- **Input:** Latest persisted cards/envelopes + previous context snapshot.
+- **Processing:**
+  - Selects an evidence set (recent and important cards across active envelopes).
+  - Uses context-update prompt template with previous snapshot + evidence cards.
+  - Produces refreshed structured context buckets:
+    - people, organizations, projects, themes, upcoming items, miscellaneous.
+- **Output:** Updated context JSON and focus summary.
+- **Stored in:** `user_context` table as a single authoritative row (`id=1`).
+- **Why it matters:** Maintains evolving global user context that improves future organization and proactive suggestions.
+
+### Thinking Agent Workflow (Scheduled)
+- Input: current cards, envelopes, and persisted `user_context`.
+- Processing:
+  - Runs only when scheduler is enabled (`thinking-start`), at configured interval.
+  - Uses thinking prompt template to generate proactive items in three classes:
+    - `next_step`
+    - `recommendation`
+    - `conflict`
+  - Attaches evidence references and reasoning steps for traceability.
+- Output: structured suggestion bundle with run metadata.
+- Stored in: JSON artifacts under `data/thinking_runs` (not persisted in DB suggestion tables).
+- Why it matters: provides proactive assistant behavior beyond passive note storage.
+
+
+--------------------------
+
+
+### Optional: Prompt Versioning (Per Agent)
+
+Use this only if you want to create and test new prompt versions.
+
+Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
+
+#### 0. Update the active prompt template first
+Before releasing a new version, edit the active alias file for that agent:
+- `src/assistant/prompts/ingestion.jinja`
+- `src/assistant/prompts/envelope_refine.jinja`
+- `src/assistant/prompts/context_update.jinja`
+- `src/assistant/prompts/thinking.jinja`
+
+#### 1. Create a new prompt version
+Use the generic release script:
+
 ```bash
-PYTHONPATH=src python -m assistant.interfaces.cli.app thinking-sample
+python scripts/release_prompt.py \
+  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
+  --changelog "short change summary" \
+  --owner "<your_name_or_team>"
 ```
 
-## Ingestion Agent Flow
-1. Accept raw note.
-2. Extract structured fields via schema-constrained LLM call (or fallback).
-3. Normalize date/time (`dateparser`).
-4. Score against existing envelopes using hybrid similarity:
-   - keyword overlap
-   - entity overlap
-   - semantic similarity
-5. Assign to best envelope or create a new envelope.
-6. Persist card + entities + context signals.
-7. Log ingestion event metadata for observability.
+Examples:
 
-## Database Schema (8 tables)
-- `cards`
-- `envelopes`
-- `entities`
-- `card_entities`
-- `context_signals`
-- `thinking_runs`
-- `thinking_suggestions`
-- `ingestion_events`
-
-## Thinking Agent Design (not implemented)
-The designed Thinking Agent runs hourly and writes persistent suggestions using `thinking_runs` and `thinking_suggestions`:
-- Next-step suggestion
-- Recommendation (cluster related ideas)
-- Conflict detection (assignee/date overlap)
-
-See `docs/thinking-agent-design.md` for full logic flow.
-
-## Testing
-Run:
 ```bash
-PYTHONPATH=src pytest -q
+python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
 ```
 
-Included tests:
-- date normalization
-- fallback extraction
-- envelope matching
-- end-to-end ingestion with SQLite in-memory DB
+What this does:
+- creates immutable snapshot `<prompt_id>.vN.jinja`
+- updates active alias `<prompt_id>.jinja`
+- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
+
+#### 2. Activate a prompt version via env
+Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
+
+```env
+INGESTION_PROMPT_VERSION=ingestion.extract.v10
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
+THINKING_PROMPT_VERSION=thinking.v1
+```

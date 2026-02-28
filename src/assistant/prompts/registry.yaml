@@ -1,0 +1,99 @@
+prompts:
+  ingestion:
+    current_version: ingestion.extract.v10
+    current_template: ingestion.v10.jinja
+    schema_version: ingestion.schema.v4
+    versions:
+      - version: ingestion.extract.v1
+        template_file: ingestion.v1.jinja
+        created_at: 2026-02-23
+        owner: mle-team
+        changelog: Initial structured extraction prompt.
+        sha256: 29a1b2d161bbf7ba2987053f17fc607539ab78f81292b3f1efd7a843fbc4f0fd
+      - version: ingestion.extract.v2
+        template_file: ingestion.v2.jinja
+        created_at: 2026-02-24
+        owner: mle-team
+        changelog: Tightened wording for intent preservation and keyword quality.
+        sha256: 5b768876a555fd1583991298751a550cdfb88331a2bb7da3bd33d8d315d3d4d4
+      - version: ingestion.extract.v3
+        template_file: ingestion.v3.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Contract-first prompt with explicit extraction constraints and confidence rubric.
+        sha256: 82f55b50ea8a114fd81400258c27d862d6f953f1fdd74669a99781b7db2a15ae
+      - version: ingestion.extract.v4
+        template_file: ingestion.v4.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Removed entity extraction, added task-priority and explicit assignee guidance.
+        sha256: c3df15d7baa74595ca561dbc7419225c6dbe91b0d88553a01d0f86f17394dee6
+      - version: ingestion.extract.v5
+        template_file: ingestion.v5.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Meaning-first prompt with few-shot examples for person/team assignee extraction.
+        sha256: 883d04b5609f042b5630d74393d50a58ca4f059d4b9bd5c4019529aa00f148ac
+      - version: ingestion.extract.v6
+        template_file: ingestion.v6.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Added explicit internal reasoning sequence for context, date_text, assignee, and card_type extraction.
+        sha256: 41eb802b9811e61ead1ca1f5f84a7638b2915daac506e52cca1149f9db711a4a
+      - version: ingestion.extract.v7
+        template_file: ingestion.v7.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Added persisted reasoning_steps output to explain extraction decisions per card.
+        sha256: 80f8ead49cba5cf443d0a97f2bf82d909ea414348875ecafa78600713480d91e
+      - version: ingestion.extract.v8
+        template_file: ingestion.v8.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: Enforced field-level evidence trace format for reasoning_steps to avoid generic summaries.
+        sha256: 941fac6805fb4a7f8f704b521c19b66438e09fe48d0a12237eff198b237f67f5
+      - version: ingestion.extract.v9
+        template_file: ingestion.v9.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: simplify the reasoning steps
+        sha256: 55813820817ddc4e8ab20a19743e387f3beb6e65afe96e4d646f86bece579b75
+      - version: ingestion.extract.v10
+        template_file: ingestion.v10.jinja
+        created_at: 2026-02-25
+        owner: mle-team
+        changelog: simplify the reasoning steps
+        sha256: b3ea99843cd3d256ed02d84c198d194f62bc9a012d8c5a896545890aa3664b7e
+  envelope_refine:
+    current_version: envelope_refine.v1
+    current_template: envelope_refine.v1.jinja
+    schema_version: envelope_refine.schema.v1
+    versions:
+      - version: envelope_refine.v1
+        template_file: envelope_refine.v1.jinja
+        created_at: 2026-02-26
+        owner: mle-team
+        changelog: Initial envelope refinement prompt.
+        sha256: 24f0e348dfb820e09903e0a11581b134cfa4f45e84ef5e0613d6f949df5b652e
+  context_update:
+    current_version: context_update.v1
+    current_template: context_update.v1.jinja
+    schema_version: context_update.schema.v1
+    versions:
+      - version: context_update.v1
+        template_file: context_update.v1.jinja
+        created_at: 2026-02-26
+        owner: mle-team
+        changelog: Initial context update prompt for structured user_context snapshots.
+        sha256: a88474f06956860f288a576d1a52f9e40c7eb24e754dc0932b55c165c8269277
+  thinking:
+    current_version: thinking.v1
+    current_template: thinking.v1.jinja
+    schema_version: thinking.schema.v1
+    versions:
+      - version: thinking.v1
+        template_file: thinking.v1.jinja
+        created_at: 2026-02-26
+        owner: mle-team
+        changelog: Initial LLM-first thinking prompt with proactive suggestion reasoning and few-shot examples.
+        sha256: 1bd681dcbeb5c8cf9ab827ad4dd0b8811a716152e8439ee58e38f78cd3272058
