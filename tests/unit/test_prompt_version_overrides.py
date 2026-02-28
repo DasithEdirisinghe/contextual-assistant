@@ -10,15 +10,15 @@ from assistant.db.base import Base
 
 
 def test_envelope_refine_prompt_version_override_valid() -> None:
-    settings = Settings(_env_file=None, ENVELOPE_REFINE_PROMPT_VERSION="envelope_refine.v1")
+    settings = Settings(_env_file=None, ENVELOPE_REFINE_PROMPT_VERSION="envelope_refine.v2")
     svc = EnvelopeRefiner(settings)
-    assert svc.prompt_version == "envelope_refine.v1"
+    assert svc.prompt_version == "envelope_refine.v2"
 
 
 def test_context_update_prompt_version_override_valid() -> None:
-    settings = Settings(_env_file=None, CONTEXT_UPDATE_PROMPT_VERSION="context_update.v1")
+    settings = Settings(_env_file=None, CONTEXT_UPDATE_PROMPT_VERSION="context_update.v2")
     svc = ContextUpdater(settings)
-    assert svc.prompt_version == "context_update.v1"
+    assert svc.prompt_version == "context_update.v2"
 
 
 def test_context_update_prompt_version_override_invalid_fails_fast() -> None:
@@ -31,7 +31,7 @@ def test_thinking_prompt_version_override_valid() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    settings = Settings(_env_file=None, THINKING_PROMPT_VERSION="thinking.v1")
+    settings = Settings(_env_file=None, THINKING_PROMPT_VERSION="thinking.v2")
     with Session() as session:
         agent = ThinkingAgent(session, settings)
-    assert agent.prompt_version == "thinking.v1"
+    assert agent.prompt_version == "thinking.v2"

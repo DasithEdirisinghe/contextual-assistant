@@ -274,10 +274,10 @@ What this does:
 Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
 
 ```env
-INGESTION_PROMPT_VERSION=ingestion.extract.v10
-ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
-CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
-THINKING_PROMPT_VERSION=thinking.v1
+INGESTION_PROMPT_VERSION=ingestion.extract.v11
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v2
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v2
+THINKING_PROMPT_VERSION=thinking.v2
 ```
 
 ## Potential Next-Step Improvements

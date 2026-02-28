@@ -11,7 +11,7 @@ from assistant.db.models import CardORM, EnvelopeORM, UserContextORM
 
 
 class _FakeStructuredInvoker:
-    def invoke(self, _prompt: str):
+    def invoke(self, _messages):
         return {
             "suggestions": [
                 {
@@ -43,7 +43,7 @@ def test_thinking_cycle_generates_artifact_and_schema_without_db_persistence(mon
     monkeypatch.setattr("assistant.agents.thinking.agent.build_chat_model", lambda _settings: _FakeLLM())
     settings = Settings(
         _env_file=None,
-        THINKING_PROMPT_VERSION="thinking.v1",
+        THINKING_PROMPT_VERSION="thinking.v2",
         THINKING_OUTPUT_DIR=str(tmp_path),
     )
 
@@ -78,7 +78,7 @@ def test_thinking_cycle_generates_artifact_and_schema_without_db_persistence(mon
 
     assert artifact.exists()
     assert len(output.suggestions) == 1
-    assert output.prompt_version == "thinking.v1"
+    assert output.prompt_version == "thinking.v2"
     assert rows and rows[0].suggestions_count == 1
 
     # Ensure schema no longer includes obsolete thinking persistence tables.

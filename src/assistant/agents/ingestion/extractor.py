@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import time
+from typing import Literal, Optional
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
+from pydantic import BaseModel, Field
 
-from assistant.agents.ingestion.schemas import IngestionExtractedCardSchema
 from assistant.config.settings import Settings
 from assistant.llm.client import build_chat_model
 from assistant.llm.parsing import extract_json_block
@@ -19,20 +19,21 @@ from assistant.schemas.card import ExtractedCard
 logger = logging.getLogger(__name__)
 
 
+class IngestionExtractedCardSchema(BaseModel):
+    card_type: Literal["task", "reminder", "idea_note"]
+    description: str = Field(min_length=1)
+    date_text: Optional[str] = None
+    assignee: Optional[str] = None
+    context_keywords: list[str] = Field(default_factory=list)
+    reasoning_steps: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
 class IngestionLLMPipeline:
     def __init__(self, settings: Settings, prompt_version: str):
         self.settings = settings
         self.prompt_version = prompt_version
         self.parser = PydanticOutputParser(pydantic_object=IngestionExtractedCardSchema)
-        self.prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "{system_prompt}\n\nReturn strictly valid JSON only.\n{format_instructions}",
-                ),
-                ("human", "{user_note}"),
-            ]
-        )
         self.llm = build_chat_model(settings)
         self.chain = (
             RunnableLambda(self._build_prompt_inputs_node)
@@ -45,16 +46,24 @@ class IngestionLLMPipeline:
     def _build_prompt_inputs_node(self, payload: dict[str, str]) -> dict[str, str]:
         raw_text = payload["raw_text"]
         logger.debug("IngestionLLM node: build_prompt_inputs raw_text_len=%s", len(raw_text))
-        rendered = load_prompt_versioned("ingestion", version=self.prompt_version, raw_note=raw_text)
+        rendered = load_prompt_versioned("ingestion", version=self.prompt_version)
         return {
             "system_prompt": rendered,
             "format_instructions": self.parser.get_format_instructions(),
-            "user_note": raw_text,
+            "human_payload": f"Raw note:\n{raw_text}",
         }
 
     def _build_messages_node(self, prompt_inputs: dict[str, str]):
         logger.debug("IngestionLLM node: build_messages")
-        return self.prompt.format_messages(**prompt_inputs)
+        return [
+            SystemMessage(
+                content=(
+                    f"{prompt_inputs['system_prompt']}\n"
+                    f"{prompt_inputs['format_instructions']}"
+                )
+            ),
+            HumanMessage(content=prompt_inputs["human_payload"]),
+        ]
 
     def _invoke_llm_node(self, messages) -> tuple[AIMessage, int]:
         logger.debug("IngestionLLM node: invoke_llm")

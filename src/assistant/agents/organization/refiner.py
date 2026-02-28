@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from assistant.config.settings import Settings
@@ -52,17 +53,27 @@ class EnvelopeRefiner:
         card_lines = "\n".join(
             f"- {card.description}" for card in cards[:12] if card.description
         ).strip()
-        prompt = load_prompt_versioned(
+        system_prompt = load_prompt_versioned(
             "envelope_refine",
             version=self.prompt_version,
-            envelope_name=envelope.name,
-            envelope_summary=envelope.summary or "",
-            card_descriptions=card_lines or "- (none)",
-            keywords=", ".join(envelope.keywords_json or []),
+        )
+        human_payload = (
+            f"Current envelope name: {envelope.name}\n\n"
+            f"Current envelope summary: {envelope.summary or ''}\n\n"
+            f"Current envelope keywords: {', '.join(envelope.keywords_json or [])}\n\n"
+            f"Recent card descriptions:\n{card_lines or '- (none)'}"
         )
         try:
             llm = build_chat_model(self.settings)
-            response = llm.with_structured_output(EnvelopeRefineOutput).invoke(prompt)
+            logger.debug(
+                "EnvelopeRefiner refine: prompt_version=%s cards=%s human_payload_len=%s",
+                self.prompt_version,
+                len(cards),
+                len(human_payload),
+            )
+            response = llm.with_structured_output(EnvelopeRefineOutput).invoke(
+                [SystemMessage(content=system_prompt), HumanMessage(content=human_payload)]
+            )
             logger.debug("EnvelopeRefiner: response=%s", response)
             return EnvelopeRefineOutput(name=response.name.strip(), summary=response.summary.strip())
         except Exception:

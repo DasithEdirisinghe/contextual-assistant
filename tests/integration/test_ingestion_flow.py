@@ -17,7 +17,7 @@ def test_ingestion_creates_card_and_envelope() -> None:
         llm_provider="openai",
         llm_api_key=None,
         database_url="sqlite+pysqlite:///:memory:",
-        INGESTION_PROMPT_VERSION="ingestion.extract.v10",
+        INGESTION_PROMPT_VERSION="ingestion.extract.v11",
     )
 
     with Session() as session:
@@ -40,7 +40,7 @@ def test_ingestion_creates_card_and_envelope() -> None:
     assert isinstance(cards[0].reasoning_steps_json, list)
     assert len(cards[0].reasoning_steps_json) >= 1
     assert len(events) == 1
-    assert events[0].prompt_version == "ingestion.extract.v10"
+    assert events[0].prompt_version == "ingestion.extract.v11"
     assert len(context_rows) <= 1
 
 
