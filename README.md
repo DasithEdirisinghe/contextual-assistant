@@ -1,10 +1,10 @@
-# Contextual Personal Assistant (Prototype)
+# Contextual Personal Assistant
 
 A personal assistant that turns unstructured notes into structured cards, organizes them into envelopes, maintains user context, and generates proactive suggestions.
 
 ## Prerequisites
 - Docker installed and running on host.
-- Ollama installed on host.
+- [Ollama](https://ollama.com/) installed on host.
 - Python 3.11+ is only needed for non-Docker local runs.
 
 ## Step-by-Step Setup (Docker-First)
@@ -126,6 +126,11 @@ envelopes
   - easier migration of logic from Python loops into SQL queries where needed.
 
 ### Database Design
+
+<!-- ![Databse Schema](assets/database_schema.png) -->
+<img src="assets/database_schema.png" alt="Databse Schema" height="400"/>
+
+
 - `cards`:
   - Core normalized record for each ingested note.
   - Stores extracted operational fields used downstream (`card_type`, `description`, `due_at`, `assignee_text`, `keywords_json`, `envelope_id`, timestamps, reasoning).
@@ -160,6 +165,13 @@ Prompt-driven behavior:
   - `context_update*.jinja` for context snapshot updates
   - `thinking*.jinja` for scheduled proactive reasoning
 - Active prompt versions are resolved from config (`.env` / `.env.docker`) with registry validation.
+
+
+### High Level Flow Chart
+
+<!-- ![High Level Diagram (mermaid)](assets/high_level_diagram.png) -->
+
+<img src="assets/high_level_diagram.png" alt="High Level Diagram (mermaid)" width="800" />
 
 ### Ingestion Workflow
 
@@ -211,20 +223,24 @@ The ingestion workflow consists of three main agents working synchronously.
 - Stored in: JSON artifacts under `data/thinking_runs` (not persisted in DB suggestion tables).
 - Why it matters: provides proactive assistant behavior beyond passive note storage.
 
-## Optional: Prompt Versioning (Per Agent)
+
+--------------------------
+
+
+### Optional: Prompt Versioning (Per Agent)
 
 Use this only if you want to create and test new prompt versions.
 
 Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
 
-### 0. Update the active prompt template first
+#### 0. Update the active prompt template first
 Before releasing a new version, edit the active alias file for that agent:
 - `src/assistant/prompts/ingestion.jinja`
 - `src/assistant/prompts/envelope_refine.jinja`
 - `src/assistant/prompts/context_update.jinja`
 - `src/assistant/prompts/thinking.jinja`
 
-### 1. Create a new prompt version
+#### 1. Create a new prompt version
 Use the generic release script:
 
 ```bash
@@ -248,7 +264,7 @@ What this does:
 - updates active alias `<prompt_id>.jinja`
 - updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
 
-### 2. Activate a prompt version via env
+#### 2. Activate a prompt version via env
 Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
 
 ```env
@@ -257,8 +273,3 @@ ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
 CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
 THINKING_PROMPT_VERSION=thinking.v1
 ```
-
-Rules:
-- env override set -> that exact version is used
-- env override unset -> registry `current_version` is used
-- invalid version -> fail-fast error at runtime
