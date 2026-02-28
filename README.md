@@ -52,10 +52,15 @@ Notes:
 - If the DB file does not exist, SQLite creates it automatically.
 - If it exists, the app reuses it.
 - For normal usage, do not change these routing/scoring settings:
-  - `ENVELOPE_ASSIGN_THRESHOLD`
-  - `EMBEDDING_WEIGHT`
-  - `KEYWORD_WEIGHT`
-  - `ENTITY_WEIGHT`
+  - `ENVELOPE_ASSIGN_THRESHOLD=0.4`
+  - `EMBEDDING_WEIGHT=0.6`
+  - `KEYWORD_WEIGHT=0.3`
+  - `ENTITY_WEIGHT=0.1`
+- No need to change following prompt versions as well
+  - `INGESTION_PROMPT_VERSION=ingestion.extract.v12`
+  - `ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v3`
+  - `CONTEXT_UPDATE_PROMPT_VERSION=context_update.v3`
+  - `THINKING_PROMPT_VERSION=thinking.v4`
 
 ## Run the App (Interactive)
 
@@ -173,7 +178,7 @@ envelopes
   - Ingestion Agent
   - Organization Agent
   - Context Agent
-- Each ingestion-stage agent uses its own prompt template family to communicate with the LLM:
+- Each ingestion-stage agent uses its own prompt template(src/assistance/prompts) family to communicate with the LLM:
   - `ingestion*.jinja`
   - `envelope_refine*.jinja`
   - `context_update*.jinja`
@@ -199,7 +204,7 @@ envelopes
 - Controls transaction boundary and event logging for ingestion.
 - Ensures the final response reflects coherent card, envelope, and context state.
 
-#### 2) Ingestion Agent behavior (`ingestion*.jinja`)
+#### 2) Ingestion Agent behavior (`ingestion.v12.jinja`)
 - Converts unstructured note text into a strict card extraction contract.
 - Uses the ingestion prompt template to produce schema-valid fields:
   - `card_type`, `description`, `date_text`, `assignee`, `context_keywords`, `reasoning_steps`, `confidence`.
@@ -210,7 +215,7 @@ envelopes
   - uncertain fields remain null rather than being invented.
 - Produces a validated card payload that can be safely consumed by organization/context stages.
 
-#### 3) Organization Agent behavior (`envelope_refine*.jinja`)
+#### 3) Organization Agent behavior (`envelope_refine.v3.jinja`)
 - Matches the new card against existing envelopes using a hybrid score:
   - semantic similarity from embeddings,
   - lexical overlap from keywords,
@@ -226,7 +231,7 @@ envelopes
 - Uses the envelope refinement prompt to improve envelope title/summary language while keeping topic continuity.
 - Persists the final card-to-envelope link and updated envelope profile state.
 
-#### 4) Context Agent behavior (`context_update*.jinja`)
+#### 4) Context Agent behavior (`context_update.v3.jinja`)
 - Maintains one evolving user context snapshot that represents current priorities and themes.
 - Builds a focused evidence set instead of sending full history:
   - most recent global cards,
@@ -247,7 +252,7 @@ envelopes
 - Runs via manual command or scheduler trigger.
 - Separate from ingestion latency path.
 
-#### 2) Thinking Agent behavior (`thinking*.jinja`)
+#### 2) Thinking Agent behavior (`thinking.v4.jinja`)
 - Reads three context layers together:
   - card-level details (actions, deadlines, assignees),
   - envelope-level grouping context,
@@ -352,8 +357,8 @@ What this does:
 Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
 
 ```env
-INGESTION_PROMPT_VERSION=ingestion.extract.v11
-ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v2
-CONTEXT_UPDATE_PROMPT_VERSION=context_update.v2
-THINKING_PROMPT_VERSION=thinking.v2
+INGESTION_PROMPT_VERSION=ingestion.extract.v12
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v3
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v3
+THINKING_PROMPT_VERSION=thinking.v4
 ```

@@ -1,7 +1,7 @@
 prompts:
   ingestion:
-    current_version: ingestion.extract.v11
-    current_template: ingestion.v11.jinja
+    current_version: ingestion.extract.v12
+    current_template: ingestion.v12.jinja
     schema_version: ingestion.schema.v4
     versions:
     - version: ingestion.extract.v1
@@ -76,9 +76,15 @@ prompts:
       owner: mle-team
       changelog: Switch to system-only instructions; runtime note in HumanMessage.
       sha256: 255d4dc6f71e1b1027ca2c3b72bff0b548701e26ec9493bc8fea4f94f08f9fc5
+    - version: ingestion.extract.v12
+      template_file: ingestion.v12.jinja
+      created_at: '2026-02-28'
+      owner: mle-team
+      changelog: remove user input
+      sha256: 6fd94b10dbf1639272e2990321f847e0954a173a0533aec340956c6653ab17e1
   envelope_refine:
-    current_version: envelope_refine.v2
-    current_template: envelope_refine.v2.jinja
+    current_version: envelope_refine.v3
+    current_template: envelope_refine.v3.jinja
     schema_version: envelope_refine.schema.v1
     versions:
     - version: envelope_refine.v1
@@ -94,9 +100,15 @@ prompts:
       changelog: Switch to system-only instructions; runtime envelope/card data in
         HumanMessage.
       sha256: 08e2a934ec4dd195283af12bcf316bafa97043d249487e5db38fad0a587ae59d
+    - version: envelope_refine.v3
+      template_file: envelope_refine.v3.jinja
+      created_at: '2026-02-28'
+      owner: mle-team
+      changelog: remove user inputs
+      sha256: 240ae30e7c3d4dd335a3255287b709d3628907cdac1ea2b228ec36821e452c9b
   context_update:
-    current_version: context_update.v2
-    current_template: context_update.v2.jinja
+    current_version: context_update.v3
+    current_template: context_update.v3.jinja
     schema_version: context_update.schema.v1
     versions:
     - version: context_update.v1
@@ -112,9 +124,15 @@ prompts:
       changelog: Switch to system-only instructions; runtime context/evidence JSON
         in HumanMessage.
       sha256: 7591312809182a7e66c87201cb29ffcc62c8ea37525f08f5242ea854c08046c0
+    - version: context_update.v3
+      template_file: context_update.v3.jinja
+      created_at: '2026-02-28'
+      owner: mle-team
+      changelog: removed user inputs
+      sha256: 815a014edfa4823a5ace225e1a30ad0a1b6d76614259958cc32f93570d3078ba
   thinking:
-    current_version: thinking.v2
-    current_template: thinking.v2.jinja
+    current_version: thinking.v4
+    current_template: thinking.v4.jinja
     schema_version: thinking.schema.v1
     versions:
     - version: thinking.v1
@@ -131,3 +149,15 @@ prompts:
       changelog: Switch to system-only instructions; runtime cards/envelopes/context
         in HumanMessage.
       sha256: ae5ef3ea69936fad97368ca80f51d166c50831339b5650fe97a6d528dcfb1941
+    - version: thinking.v3
+      template_file: thinking.v3.jinja
+      created_at: '2026-02-28'
+      owner: mle-team
+      changelog: Add conflict-detection few-shot
+      sha256: cf8c0ebcf2ba86ec47aad51ad729f4ffdd87eeaade386e55b7728334380959ce
+    - version: thinking.v4
+      template_file: thinking.v4.jinja
+      created_at: '2026-02-28'
+      owner: mle-team
+      changelog: Add reasoning protocol
+      sha256: b4ddc756c5afa26e79927679405eed1b9bb6b13baf22c39dae9ca1111534372e
