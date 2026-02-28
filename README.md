@@ -72,6 +72,12 @@ What happens after launch:
 - The container starts the interactive CLI prompt.
 - You enter commands directly in that shell.
 
+Runtime disclaimer:
+- This pipeline has been tested primarily with Ollama using `llama3.1:8b` as the LLM.
+- If you switch to other LLMs/providers (including OpenAI), validate behavior separately.
+- Current validation environment was macOS with 24 GB VRAM.
+- It should work on other hosts, but for Ollama-based models use at least 16 GB VRAM for smoother execution.
+
 ## First-Run Usage
 
 Example commands inside interactive CLI:
@@ -273,3 +279,26 @@ ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
 CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
 THINKING_PROMPT_VERSION=thinking.v1
 ```
+
+## Potential Next-Step Improvements
+
+1. Decouple synchronous ingest path from heavy post-processing  
+Move envelope refinement and context refresh to async workers so note ingestion stays fast under load.
+
+2. Incremental envelope profile updates  
+Replace full envelope recomputation on each ingest with incremental updates (embedding centroid, keyword profile, counters), and run periodic full rebuilds only as maintenance.
+
+3. Multi-user data model  
+Add `user_id` scoping to cards, envelopes, events, and context snapshot for tenant isolation and true product-scale behavior.
+
+4. Production database + migrations  
+Move from SQLite to PostgreSQL for higher concurrency and introduce migration tooling (e.g., Alembic) for controlled schema evolution.
+
+5. LLM reliability and cost controls  
+Standardize timeout/retry policies, add extraction validation gates, and log per-agent latency/token usage/cost telemetry.
+
+6. Thinking pipeline efficiency  
+Add deterministic candidate pre-filtering before LLM reasoning so thinking runs stay bounded as dataset size grows.
+
+7. Operational observability  
+Introduce request tracing and agent-level metrics (latency, failure rate, confidence distribution) with clear SLO/alert thresholds.
