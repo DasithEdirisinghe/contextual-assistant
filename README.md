@@ -159,109 +159,113 @@ envelopes
   - Current optimization strategy focuses on reducing scanned rows and moving ranking/filter logic into SQL.
   - Explicit ORM index declarations were intentionally not added in this phase (keeps schema simpler until profiling proves index need).
 
-### Pipeline Explanation
-
-Prompt-driven behavior:
-- LLM-backed stages use versioned prompt templates from `src/assistant/prompts/`.
-- Main prompt families:
-  - `ingestion*.jinja` for ingestion extraction
-  - `envelope_refine*.jinja` for envelope profile refinement
-  - `context_update*.jinja` for context snapshot updates
-  - `thinking*.jinja` for scheduled proactive reasoning
-- Active prompt versions are resolved from config (`.env` / `.env.docker`) with registry validation.
 
 ### High Level Flow Diagram
 
 <img src="assets/high_level_diagram.png" alt="High Level Diagram" width="800" />
 
-### Ingestion Workflow
 
-#### 1) Ingestion Agent
-- The ingestion stage converts free-text notes into strict structured output:
+- `Orchestrator` is the central coordinator that orchestrates each pipeline.
+- The system currently supports two workflows:
+  1. Ingestion Workflow (synchronous)
+  2. Thinking Workflow (triggered/scheduled)
+- In the ingestion path, three agents are working synchronously:
+  - Ingestion Agent
+  - Organization Agent
+  - Context Agent
+- Each ingestion-stage agent uses its own prompt template family to communicate with the LLM:
+  - `ingestion*.jinja`
+  - `envelope_refine*.jinja`
+  - `context_update*.jinja`
+- Thinking Agent works separately based on a trigger and uses a dedicated reasoning-based prompt (`thinking*.jinja`).
+- Shared infrastructure in both workflows:
+  - LLM provider
+  - embedding model
+  - SQLite database
+  - thinking artifact store
+- Active prompt versions are resolved from environment overrides plus `registry.yaml`.
+
+### Supported Workflows
+
+- **Workflow 1: Ingestion (synchronous request path)**
+  - user note -> orchestrator -> ingestion -> organization -> context -> persist + response.
+- **Workflow 2: Thinking (asynchronous trigger path)**
+  - trigger -> orchestrator -> thinking agent -> artifact output.
+
+### Ingestion Workflow (Synchronous)
+
+#### 1) Orchestrator role
+- Calls agents in a fixed order.
+- Controls transaction boundary and event logging for ingestion.
+- Ensures the final response reflects coherent card, envelope, and context state.
+
+#### 2) Ingestion Agent behavior (`ingestion*.jinja`)
+- Converts unstructured note text into a strict card extraction contract.
+- Uses the ingestion prompt template to produce schema-valid fields:
   - `card_type`, `description`, `date_text`, `assignee`, `context_keywords`, `reasoning_steps`, `confidence`.
-- Strict schema validation is used because every downstream stage depends on these fields.
-- `date_text` is resolved deterministically into `due_at` so temporal interpretation is stable across runs and not dependent on LLM variance.
-- This contract-first design reduces ambiguity propagation and makes organization/context/thinking behavior more reliable.
+- Uses structured parsing and validation so malformed model outputs are rejected early.
+- Applies deterministic temporal normalization:
+  - converts natural language time phrase (`date_text`) into machine-usable `due_at`.
+- Preserves extraction quality through conservative behavior:
+  - uncertain fields remain null rather than being invented.
+- Produces a validated card payload that can be safely consumed by organization/context stages.
 
-#### 2) Organization Agent
-- Envelope assignment uses a hybrid scoring function:
-  - `final_score = EMBEDDING_WEIGHT * semantic_similarity + KEYWORD_WEIGHT * keyword_overlap + ENTITY_WEIGHT * assignee_bonus`
-- Decision policy:
-  - if best score >= `ENVELOPE_ASSIGN_THRESHOLD` -> assign to existing envelope,
-  - else create a new envelope.
-- Why this hybrid approach:
-  - embeddings capture semantic similarity,
-  - keyword overlap keeps lexical precision,
-  - assignee bonus helps person-centric clustering.
-- After assignment, envelope profile is refreshed:
-  - deterministic profile updates (keywords, embedding centroid, counters),
-  - LLM-based refinement for envelope name/summary text quality.
-- Design tradeoff:
-  - routing decision is deterministic and explainable,
-  - LLM is used where language quality matters most (profile text refinement).
+#### 3) Organization Agent behavior (`envelope_refine*.jinja`)
+- Matches the new card against existing envelopes using a hybrid score:
+  - semantic similarity from embeddings,
+  - lexical overlap from keywords,
+  - assignee-aware signal when person/team context aligns.
+- Uses weighted scoring to produce one final match score per envelope, then selects the best candidate.
+- Applies threshold-based routing:
+  - if best score is strong enough -> assign to existing envelope,
+  - otherwise -> create a new envelope with a seed name/summary.
+- After routing, refreshes envelope profile so future matching improves:
+  - top keywords (recency-aware),
+  - embedding centroid,
+  - card count and latest activity timestamp.
+- Uses the envelope refinement prompt to improve envelope title/summary language while keeping topic continuity.
+- Persists the final card-to-envelope link and updated envelope profile state.
 
-#### 3) Storage progression rationale
-- Card is persisted with envelope linkage.
-- Envelope state is updated so future matching quality improves with accumulated data.
-- This creates a progressively better organization loop with each ingested note.
-
-### Context Agent Logic
-
-#### 1) Evidence selection strategy
-- Context updates are not based on full history every time.
-- Evidence set is built from:
-  - latest global cards,
-  - top “important” cards from active envelopes.
-- This keeps prompts focused, reduces noise, and scales better than sending all cards.
-
-#### 2) Prompting strategy for context refinement
-- Context update prompt receives:
-  - previous snapshot,
-  - current evidence cards.
-- Why:
-  - previous snapshot provides continuity,
-  - evidence cards provide recency grounding.
-- This supports stable evolution of context instead of abrupt context drift.
-
-#### 3) Structured context output
-- Output buckets are explicit:
-  - people, organizations, projects, themes, important_upcoming, miscellaneous.
-- Focus summary is generated as a concise human-readable view of current priorities.
-- Structured output is used to keep downstream consumption deterministic.
-
-#### 4) Persistence model
-- Context is stored as one authoritative snapshot row (`user_context.id=1`).
-- This gives simple O(1) read access for routing/thinking and avoids expensive merge logic at read time.
-
-### Reasoning-Centric Thinking Agent
-
-#### 1) Why scheduled/triggered
-- Thinking runs are decoupled from synchronous ingestion.
-- This keeps note ingestion responsive while still enabling proactive assistant behavior.
-
-#### 2) What data it analyzes
-- Thinking consumes:
-  - cards (task/reminder/idea-level details),
-  - envelopes (group-level context),
-  - persisted user context (global priorities).
-- Combining local + grouped + global signals improves suggestion relevance.
-
-#### 3) Why reasoning-based prompting
-- Thinking is a cross-entity reasoning problem, not simple extraction.
-- Prompting is designed to produce:
-  - `next_step`,
-  - `recommendation`,
-  - `conflict`.
-- `reasoning_steps` and evidence IDs are included for transparency and inspectability.
-
-#### 4) Why JSON structured output and artifacts
-- JSON schema ensures deterministic parsing and safe downstream automation.
-- Thinking results are written to artifact files (`data/thinking_runs`) for auditable, reproducible outputs without coupling to additional DB tables.
+#### 4) Context Agent behavior (`context_update*.jinja`)
+- Maintains one evolving user context snapshot that represents current priorities and themes.
+- Builds a focused evidence set instead of sending full history:
+  - most recent global cards,
+  - plus one important card from active envelopes.
+- Importance is driven by practical signals such as card type, due date presence, assignee presence, and keyword richness.
+- Combines previous context snapshot + current evidence so updates are both:
+  - continuous (no abrupt context resets),
+  - recent (reflect new activity).
+- Uses context-update prompt to generate structured context buckets:
+  - people, organizations, projects, themes, important upcoming, miscellaneous,
+  - and a concise focus summary.
+- Writes refreshed `user_context` snapshot; if context update fails, previous snapshot is retained.
 
 
---------------------------
+### Thinking Workflow (Triggered / Scheduled)
 
+#### 1) Trigger model
+- Runs via manual command or scheduler trigger.
+- Separate from ingestion latency path.
 
+#### 2) Thinking Agent behavior (`thinking*.jinja`)
+- Reads three context layers together:
+  - card-level details (actions, deadlines, assignees),
+  - envelope-level grouping context,
+  - global user context snapshot.
+- Uses a dedicated reasoning-based prompt because this is a cross-entity inference task, not direct extraction.
+- Generates proactive suggestions in three categories:
+  - `next_step` (what to do next),
+  - `recommendation` (organization/planning improvements),
+  - `conflict` (overlaps/deadline or assignee collisions).
+- Produces evidence-backed outputs:
+  - each suggestion includes supporting IDs and reasoning steps for traceability.
+- Runs separately from ingestion so proactive reasoning does not add latency to note capture.
+
+#### 3) Output model
+- Uses JSON-structured output for deterministic parsing.
+- Writes results as artifact files under `data/thinking_runs` for auditable review.
+
+-------------------------
 
 ### Use of AI Tools
 
@@ -279,6 +283,7 @@ AI tools were used as engineering accelerators during this project.
   - final implementation decisions, code review, and behavior checks were manually validated.
   - test suites and manual CLI checks were used to verify system behavior.
 
+-------------------------
 
 ## Potential Next-Step Improvements
 
@@ -306,8 +311,7 @@ Introduce request tracing and agent-level metrics (latency, failure rate, confid
 
 -------------------------------
 
-
-#### Optional: Prompt Versioning (Per Agent)
+### Optional: Prompt Versioning (Per Agent)
 
 Use this only if you want to create and test new prompt versions.
 
