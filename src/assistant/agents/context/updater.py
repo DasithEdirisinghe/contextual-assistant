@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from assistant.config.settings import Settings
 from assistant.llm.client import build_chat_model
 from assistant.prompts import load_prompt_versioned, resolve_prompt_version
@@ -58,15 +60,25 @@ class ContextUpdater:
         if not evidence:
             raise ContextUpdateError("No evidence cards available for context update")
 
-        prompt = load_prompt_versioned(
+        system_prompt = load_prompt_versioned(
             "context_update",
             version=self.prompt_version,
-            previous_context_json=previous_context_json,
-            evidence_cards_json=_format_evidence(evidence),
+        )
+        human_payload = (
+            f"Previous context JSON:\n{previous_context_json}\n\n"
+            f"Evidence cards JSON:\n{_format_evidence(evidence)}"
         )
         try:
             llm = build_chat_model(self.settings)
-            result = llm.with_structured_output(ContextUpdateOutput).invoke(prompt)
+            logger.debug(
+                "ContextUpdater update: prompt_version=%s evidence_count=%s human_payload_len=%s",
+                self.prompt_version,
+                len(evidence),
+                len(human_payload),
+            )
+            result = llm.with_structured_output(ContextUpdateOutput).invoke(
+                [SystemMessage(content=system_prompt), HumanMessage(content=human_payload)]
+            )
             return ContextUpdateOutput.model_validate(result)
         except Exception as exc:  # noqa: BLE001
             raise ContextUpdateError(str(exc)) from exc

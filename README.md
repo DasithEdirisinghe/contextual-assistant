@@ -2,6 +2,7 @@
 
 A personal assistant that turns unstructured notes into structured cards, organizes them into envelopes, maintains user context, and generates proactive suggestions.
 
+
 ## Prerequisites
 - Docker installed and running on host.
 - [Ollama](https://ollama.com/) installed on host.
@@ -110,7 +111,6 @@ cards
 envelopes
 ```
 
-
 ## Architecture & Design
 
 ### Why LangChain
@@ -133,9 +133,7 @@ envelopes
 
 ### Database Design
 
-<!-- ![Databse Schema](assets/database_schema.png) -->
-<img src="assets/database_schema.png" alt="Databse Schema" height="400"/>
-
+<img src="assets/database_schema.png" alt="Database Schema" height="400"/>
 
 - `cards`:
   - Core normalized record for each ingested note.
@@ -172,113 +170,115 @@ Prompt-driven behavior:
   - `thinking*.jinja` for scheduled proactive reasoning
 - Active prompt versions are resolved from config (`.env` / `.env.docker`) with registry validation.
 
+### High Level Flow Diagram
 
-### High Level Flow Chart
-
-<!-- ![High Level Diagram (mermaid)](assets/high_level_diagram.png) -->
-
-<img src="assets/high_level_diagram.png" alt="High Level Diagram (mermaid)" width="800" />
+<img src="assets/high_level_diagram.png" alt="High Level Diagram" width="800" />
 
 ### Ingestion Workflow
 
-The ingestion workflow consists of three main agents working synchronously.
+#### 1) Ingestion Agent
+- The ingestion stage converts free-text notes into strict structured output:
+  - `card_type`, `description`, `date_text`, `assignee`, `context_keywords`, `reasoning_steps`, `confidence`.
+- Strict schema validation is used because every downstream stage depends on these fields.
+- `date_text` is resolved deterministically into `due_at` so temporal interpretation is stable across runs and not dependent on LLM variance.
+- This contract-first design reduces ambiguity propagation and makes organization/context/thinking behavior more reliable.
 
-#### 1. Ingestion Agent
-- **Input:** One raw user note (free text).
-- **Processing:**
-  - Uses the ingestion prompt template to extract:
-    - `card_type`, `description`, `date_text`, `assignee`, `context_keywords`, `reasoning_steps`, `confidence`
-  - Runs deterministic date resolution to convert `date_text` (for example, `next Monday`, `tonight`) into `due_at` when resolvable.
-- **Output:** A validated card object ready for routing and persistence.
-- **Stored in:** `cards` table (`description`, `card_type`, `due_at`, `assignee_text`, `keywords_json`, etc.).
-- **Why it matters:** Converts ambiguous natural language into stable, machine-usable fields for downstream agents.
+#### 2) Organization Agent
+- Envelope assignment uses a hybrid scoring function:
+  - `final_score = EMBEDDING_WEIGHT * semantic_similarity + KEYWORD_WEIGHT * keyword_overlap + ENTITY_WEIGHT * assignee_bonus`
+- Decision policy:
+  - if best score >= `ENVELOPE_ASSIGN_THRESHOLD` -> assign to existing envelope,
+  - else create a new envelope.
+- Why this hybrid approach:
+  - embeddings capture semantic similarity,
+  - keyword overlap keeps lexical precision,
+  - assignee bonus helps person-centric clustering.
+- After assignment, envelope profile is refreshed:
+  - deterministic profile updates (keywords, embedding centroid, counters),
+  - LLM-based refinement for envelope name/summary text quality.
+- Design tradeoff:
+  - routing decision is deterministic and explainable,
+  - LLM is used where language quality matters most (profile text refinement).
 
-#### 2. Organization Agent
-- **Input:** Newly extracted card + current envelope set.
-- **Processing:**
-  - Computes envelope match score using embedding similarity + keyword overlap.
-  - Applies threshold-based decision:
-    - assign to best existing envelope, or
-    - create a new envelope when no strong match exists.
-  - Uses envelope refine prompt template to update envelope profile (`name`, `summary`, `keywords`, embedding centroid) as cards accumulate.
-- **Output:** Envelope assignment/creation decision and updated profile values.
-- **Stored in:** `envelopes` table; card row is linked via `cards.envelope_id`.
-- **Why it matters:** Keeps related notes grouped so retrieval and later reasoning operate on coherent context buckets.
+#### 3) Storage progression rationale
+- Card is persisted with envelope linkage.
+- Envelope state is updated so future matching quality improves with accumulated data.
+- This creates a progressively better organization loop with each ingested note.
 
-#### 3. Context Agent
-- **Input:** Latest persisted cards/envelopes + previous context snapshot.
-- **Processing:**
-  - Selects an evidence set (recent and important cards across active envelopes).
-  - Uses context-update prompt template with previous snapshot + evidence cards.
-  - Produces refreshed structured context buckets:
-    - people, organizations, projects, themes, upcoming items, miscellaneous.
-- **Output:** Updated context JSON and focus summary.
-- **Stored in:** `user_context` table as a single authoritative row (`id=1`).
-- **Why it matters:** Maintains evolving global user context that improves future organization and proactive suggestions.
+### Context Agent Logic
 
-### Thinking Agent Workflow (Scheduled)
-- Input: current cards, envelopes, and persisted `user_context`.
-- Processing:
-  - Runs only when scheduler is enabled (`thinking-start`), at configured interval.
-  - Uses thinking prompt template to generate proactive items in three classes:
-    - `next_step`
-    - `recommendation`
-    - `conflict`
-  - Attaches evidence references and reasoning steps for traceability.
-- Output: structured suggestion bundle with run metadata.
-- Stored in: JSON artifacts under `data/thinking_runs` (not persisted in DB suggestion tables).
-- Why it matters: provides proactive assistant behavior beyond passive note storage.
+#### 1) Evidence selection strategy
+- Context updates are not based on full history every time.
+- Evidence set is built from:
+  - latest global cards,
+  - top “important” cards from active envelopes.
+- This keeps prompts focused, reduces noise, and scales better than sending all cards.
+
+#### 2) Prompting strategy for context refinement
+- Context update prompt receives:
+  - previous snapshot,
+  - current evidence cards.
+- Why:
+  - previous snapshot provides continuity,
+  - evidence cards provide recency grounding.
+- This supports stable evolution of context instead of abrupt context drift.
+
+#### 3) Structured context output
+- Output buckets are explicit:
+  - people, organizations, projects, themes, important_upcoming, miscellaneous.
+- Focus summary is generated as a concise human-readable view of current priorities.
+- Structured output is used to keep downstream consumption deterministic.
+
+#### 4) Persistence model
+- Context is stored as one authoritative snapshot row (`user_context.id=1`).
+- This gives simple O(1) read access for routing/thinking and avoids expensive merge logic at read time.
+
+### Reasoning-Centric Thinking Agent
+
+#### 1) Why scheduled/triggered
+- Thinking runs are decoupled from synchronous ingestion.
+- This keeps note ingestion responsive while still enabling proactive assistant behavior.
+
+#### 2) What data it analyzes
+- Thinking consumes:
+  - cards (task/reminder/idea-level details),
+  - envelopes (group-level context),
+  - persisted user context (global priorities).
+- Combining local + grouped + global signals improves suggestion relevance.
+
+#### 3) Why reasoning-based prompting
+- Thinking is a cross-entity reasoning problem, not simple extraction.
+- Prompting is designed to produce:
+  - `next_step`,
+  - `recommendation`,
+  - `conflict`.
+- `reasoning_steps` and evidence IDs are included for transparency and inspectability.
+
+#### 4) Why JSON structured output and artifacts
+- JSON schema ensures deterministic parsing and safe downstream automation.
+- Thinking results are written to artifact files (`data/thinking_runs`) for auditable, reproducible outputs without coupling to additional DB tables.
 
 
 --------------------------
 
 
-### Optional: Prompt Versioning (Per Agent)
 
-Use this only if you want to create and test new prompt versions.
+### Use of AI Tools
 
-Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
+AI tools were used as engineering accelerators during this project.
 
-#### 0. Update the active prompt template first
-Before releasing a new version, edit the active alias file for that agent:
-- `src/assistant/prompts/ingestion.jinja`
-- `src/assistant/prompts/envelope_refine.jinja`
-- `src/assistant/prompts/context_update.jinja`
-- `src/assistant/prompts/thinking.jinja`
+- Tools used:
+  - Cursor + Codex was used for design iteration, refactoring guidance, and documentation improvements.
+- Role of AI assistance:
+  - architecture alternative brainstorming,
+  - code scaffolding/refactoring support,
+  - prompt drafting and refinement,
+  - test-case idea generation,
+  - README wording and structure improvements.
+- Human validation:
+  - final implementation decisions, code review, and behavior checks were manually validated.
+  - test suites and manual CLI checks were used to verify system behavior.
 
-#### 1. Create a new prompt version
-Use the generic release script:
-
-```bash
-python scripts/release_prompt.py \
-  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
-  --changelog "short change summary" \
-  --owner "<your_name_or_team>"
-```
-
-Examples:
-
-```bash
-python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
-python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
-```
-
-What this does:
-- creates immutable snapshot `<prompt_id>.vN.jinja`
-- updates active alias `<prompt_id>.jinja`
-- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
-
-#### 2. Activate a prompt version via env
-Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
-
-```env
-INGESTION_PROMPT_VERSION=ingestion.extract.v10
-ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v1
-CONTEXT_UPDATE_PROMPT_VERSION=context_update.v1
-THINKING_PROMPT_VERSION=thinking.v1
-```
 
 ## Potential Next-Step Improvements
 
@@ -302,3 +302,54 @@ Add deterministic candidate pre-filtering before LLM reasoning so thinking runs 
 
 7. Operational observability  
 Introduce request tracing and agent-level metrics (latency, failure rate, confidence distribution) with clear SLO/alert thresholds.
+
+
+-------------------------------
+
+
+#### Optional: Prompt Versioning (Per Agent)
+
+Use this only if you want to create and test new prompt versions.
+
+Versioned prompts live in `src/assistant/prompts/` and are tracked in `registry.yaml`.
+
+##### 0. Update the active prompt template first
+Before releasing a new version, edit the active alias file for that agent:
+- `src/assistant/prompts/ingestion.jinja`
+- `src/assistant/prompts/envelope_refine.jinja`
+- `src/assistant/prompts/context_update.jinja`
+- `src/assistant/prompts/thinking.jinja`
+
+##### 1. Create a new prompt version
+Use the generic release script:
+
+```bash
+python scripts/release_prompt.py \
+  --prompt-id <ingestion|envelope_refine|context_update|thinking> \
+  --changelog "short change summary" \
+  --owner "<your_name_or_team>"
+```
+
+Examples:
+
+```bash
+python scripts/release_prompt.py --prompt-id ingestion --changelog "Improve assignee extraction examples" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id envelope_refine --changelog "Refine envelope title constraints" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id context_update --changelog "Improve evidence weighting rules" --owner "mle-team"
+python scripts/release_prompt.py --prompt-id thinking --changelog "Add conflict-detection few-shot" --owner "mle-team"
+```
+
+What this does:
+- creates immutable snapshot `<prompt_id>.vN.jinja`
+- updates active alias `<prompt_id>.jinja`
+- updates `registry.yaml` (`current_version`, `current_template`, changelog, sha256)
+
+##### 2. Activate a prompt version via env
+Set the corresponding env key in `.env`, `.env.docker`, or `.env.docker.local`:
+
+```env
+INGESTION_PROMPT_VERSION=ingestion.extract.v11
+ENVELOPE_REFINE_PROMPT_VERSION=envelope_refine.v2
+CONTEXT_UPDATE_PROMPT_VERSION=context_update.v2
+THINKING_PROMPT_VERSION=thinking.v2
+```

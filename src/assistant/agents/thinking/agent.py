@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.orm import Session
 
 from assistant.config.settings import Settings
@@ -84,21 +85,26 @@ class ThinkingAgent:
         user_context = self._serialize_context()
         input_stats = ThinkingInputStats(cards_scanned=len(cards), envelopes_scanned=len(envelopes))
 
-        prompt = load_prompt_versioned(
+        system_prompt = load_prompt_versioned(
             "thinking",
             version=self.prompt_version,
-            cards_json=json.dumps(cards, ensure_ascii=False, indent=2),
-            envelopes_json=json.dumps(envelopes, ensure_ascii=False, indent=2),
-            user_context_json=json.dumps(user_context, ensure_ascii=False, indent=2),
+        )
+        human_payload = (
+            f"Cards JSON:\n{json.dumps(cards, ensure_ascii=False, indent=2)}\n\n"
+            f"Envelopes JSON:\n{json.dumps(envelopes, ensure_ascii=False, indent=2)}\n\n"
+            f"User Context JSON:\n{json.dumps(user_context, ensure_ascii=False, indent=2)}"
         )
         llm = build_chat_model(self.settings)
         logger.debug(
-            "ThinkingAgent run_cycle: prompt_version=%s cards=%s envelopes=%s",
+            "ThinkingAgent run_cycle: prompt_version=%s cards=%s envelopes=%s human_payload_len=%s",
             self.prompt_version,
             len(cards),
             len(envelopes),
+            len(human_payload),
         )
-        parsed = llm.with_structured_output(ThinkingSuggestionBatch).invoke(prompt)
+        parsed = llm.with_structured_output(ThinkingSuggestionBatch).invoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=human_payload)]
+        )
         batch = ThinkingSuggestionBatch.model_validate(parsed)
 
         return ThinkingRunOutput(

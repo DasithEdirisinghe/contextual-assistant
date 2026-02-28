@@ -7,18 +7,25 @@ from assistant.prompts import file_sha256, load_prompt, load_prompt_versioned, l
 from assistant.prompts import loader as prompt_loader
 
 
-def test_load_prompt_renders_variable() -> None:
-    rendered = load_prompt("ingestion.jinja", raw_note="Call Sarah")
-    assert "Call Sarah" in rendered
+def test_load_prompt_renders_instruction_template() -> None:
+    rendered = load_prompt("ingestion.jinja")
+    assert "[ROLE]" in rendered
+    assert "Return strictly valid JSON" in rendered
 
 
 def test_load_prompt_missing_variable_raises() -> None:
-    with pytest.raises(ValueError):
-        load_prompt("ingestion.jinja")
+    template_name = "_tmp_required_var.jinja"
+    template_path = prompt_loader.PROMPTS_DIR / template_name
+    template_path.write_text("hello {{ required_name }}", encoding="utf-8")
+    try:
+        with pytest.raises(ValueError):
+            load_prompt(template_name)
+    finally:
+        template_path.unlink(missing_ok=True)
 
 
 def test_ingestion_prompt_contract_sections_exist() -> None:
-    rendered = load_prompt("ingestion.jinja", raw_note="Call Sarah about the Q3 budget next Monday")
+    rendered = load_prompt("ingestion.jinja")
     lower = rendered.lower()
     assert "[role]" in lower
     assert "output contract" in lower
@@ -29,8 +36,7 @@ def test_ingestion_prompt_contract_sections_exist() -> None:
 
 
 def test_load_prompt_versioned_uses_current_when_version_missing() -> None:
-    rendered = load_prompt_versioned("ingestion", raw_note="Call Sarah")
-    assert "Call Sarah" in rendered
+    rendered = load_prompt_versioned("ingestion")
     assert "[role]" in rendered.lower()
 
 

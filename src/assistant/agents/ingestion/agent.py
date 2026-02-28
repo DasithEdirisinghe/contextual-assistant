@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from assistant.agents.ingestion.fallback import FallbackExtractor
-from assistant.agents.ingestion.llm_pipeline import IngestionLLMPipeline
+from assistant.agents.ingestion.extractor import IngestionLLMPipeline
 from assistant.config.settings import Settings
 from assistant.prompts import resolve_prompt_version
 from assistant.schemas.card import ExtractedCard
